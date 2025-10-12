@@ -1,0 +1,58 @@
+{
+  "placeholderImages": [
+    {
+      "id": "hero",
+      "description": "A vibrant image of diverse professionals collaborating in a modern office.",
+      "imageUrl": "https://picsum.photos/seed/1/1200/800",
+      "imageHint": "professionals collaborating"
+    },
+    {
+      "id": "avatar1",
+      "description": "Profile picture of Sarah Johnson.",
+      "imageUrl": "https://picsum.photos/seed/101/200/200",
+      "imageHint": "woman smiling"
+    },
+    {
+      "id": "avatar2",
+      "description": "Profile picture of Michael Chen.",
+      "imageUrl": "https://picsum.photos/seed/102/200/200",
+      "imageHint": "man portrait"
+    },
+    {
+      "id": "avatar3",
+      "description": "Profile picture of Emily Rodriguez.",
+      "imageUrl": "https://picsum.photos/seed/103/200/200",
+      "imageHint": "person business"
+    },
+    {
+      "id": "company1",
+      "description": "Logo for Innovate Inc.",
+      "imageUrl": "https://picsum.photos/seed/201/200/200",
+      "imageHint": "abstract logo"
+    },
+    {
+      "id": "company2",
+      "description": "Logo for Quantum Solutions.",
+      "imageUrl": "https://picsum.photos/seed/202/200/200",
+      "imageHint": "tech logo"
+    },
+    {
+      "id": "feature-match",
+      "description": "Illustration for AI-powered job matching.",
+      "imageUrl": "https://picsum.photos/seed/301/500/300",
+      "imageHint": "network connections"
+    },
+    {
+      "id": "feature-chat",
+      "description": "Illustration for direct messaging.",
+      "imageUrl": "https://picsum.photos/seed/302/500/300",
+      "imageHint": "chat bubbles"
+    },
+    {
+      "id": "feature-profile",
+      "description": "Illustration for public candidate profiles.",
+      "imageUrl": "https://picsum.photos/seed/303/500/300",
+      "imageHint": "personal profile"
+    }
+  ]
+}

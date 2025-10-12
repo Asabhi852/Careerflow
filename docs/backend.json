@@ -1,0 +1,357 @@
+{
+  "entities": {
+    "UserProfile": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "UserProfile",
+      "type": "object",
+      "description": "Represents a user's profile in the CareerFlow Connect application.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the UserProfile entity."
+        },
+        "firstName": {
+          "type": "string",
+          "description": "User's first name."
+        },
+        "lastName": {
+          "type": "string",
+          "description": "User's last name."
+        },
+        "email": {
+          "type": "string",
+          "description": "User's email address.",
+          "format": "email"
+        },
+        "location": {
+          "type": "string",
+          "description": "User's location."
+        },
+        "skills": {
+          "type": "array",
+          "description": "List of user's skills.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "education": {
+          "type": "array",
+          "description": "User's educational history.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "resumeUrl": {
+          "type": "string",
+          "description": "URL of the user's resume.",
+          "format": "uri"
+        },
+        "profilePictureUrl": {
+          "type": "string",
+          "description": "URL of the user's profile picture.",
+          "format": "uri"
+        },
+        "interests": {
+          "type": "array",
+          "description": "User's interests.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "age": {
+          "type": "number",
+          "description": "User's age."
+        },
+        "videoDemoUrl": {
+          "type": "string",
+          "description": "URL to user's video demonstration.",
+          "format": "uri"
+        }
+      },
+      "required": [
+        "id",
+        "firstName",
+        "lastName",
+        "email"
+      ]
+    },
+    "JobPosting": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "JobPosting",
+      "type": "object",
+      "description": "Represents a job posting in the CareerFlow Connect application.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the JobPosting entity."
+        },
+        "title": {
+          "type": "string",
+          "description": "Title of the job posting."
+        },
+        "description": {
+          "type": "string",
+          "description": "Description of the job posting."
+        },
+        "company": {
+          "type": "string",
+          "description": "Company posting the job."
+        },
+        "location": {
+          "type": "string",
+          "description": "Location of the job."
+        },
+        "salary": {
+          "type": "number",
+          "description": "Salary for the job."
+        },
+        "skills": {
+          "type": "array",
+          "description": "Required skills for the job.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "posterId": {
+          "type": "string",
+          "description": "Reference to UserProfile of the user posting the job. (Relationship: UserProfile 1:N JobPosting)"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "description",
+        "company",
+        "location"
+      ]
+    },
+    "Message": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Message",
+      "type": "object",
+      "description": "Represents a direct message between users.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Message entity."
+        },
+        "senderId": {
+          "type": "string",
+          "description": "Reference to UserProfile of the sender. (Relationship: UserProfile 1:N Message as Sender)"
+        },
+        "receiverId": {
+          "type": "string",
+          "description": "Reference to UserProfile of the receiver. (Relationship: UserProfile 1:N Message as Receiver)"
+        },
+        "content": {
+          "type": "string",
+          "description": "Content of the message."
+        },
+        "timestamp": {
+          "type": "string",
+          "description": "Timestamp of when the message was sent.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "senderId",
+        "receiverId",
+        "content",
+        "timestamp"
+      ]
+    },
+    "Application": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Application",
+      "type": "object",
+      "description": "Represents a job application.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Application entity."
+        },
+        "jobPostingId": {
+          "type": "string",
+          "description": "Reference to the JobPosting being applied for. (Relationship: JobPosting 1:N Application)"
+        },
+        "applicantId": {
+          "type": "string",
+          "description": "Reference to the UserProfile of the applicant. (Relationship: UserProfile 1:N Application)"
+        },
+        "applicationDate": {
+          "type": "string",
+          "description": "Date when the application was submitted.",
+          "format": "date-time"
+        },
+        "status": {
+          "type": "string",
+          "description": "Current status of the application (e.g., 'submitted', 'reviewed', 'interviewing', 'offered', 'rejected')."
+        }
+      },
+      "required": [
+        "id",
+        "jobPostingId",
+        "applicantId",
+        "applicationDate",
+        "status"
+      ]
+    },
+    "Notification": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Notification",
+      "type": "object",
+      "description": "Represents a notification for a user.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Notification entity."
+        },
+        "userId": {
+          "type": "string",
+          "description": "Reference to the UserProfile the notification is for. (Relationship: UserProfile 1:N Notification)"
+        },
+        "message": {
+          "type": "string",
+          "description": "The notification message."
+        },
+        "timestamp": {
+          "type": "string",
+          "description": "Timestamp when the notification was created.",
+          "format": "date-time"
+        },
+        "type": {
+          "type": "string",
+          "description": "Type of notification (e.g., 'profile_view', 'new_message', 'application_update')."
+        },
+        "isRead": {
+          "type": "boolean",
+          "description": "Indicates whether the notification has been read by the user."
+        }
+      },
+      "required": [
+        "id",
+        "userId",
+        "message",
+        "timestamp",
+        "type",
+        "isRead"
+      ]
+    }
+  },
+  "auth": {
+    "providers": [
+      "password",
+      "anonymous"
+    ]
+  },
+  "firestore": {
+    "structure": [
+      {
+        "path": "/users/{userId}",
+        "definition": {
+          "entityName": "UserProfile",
+          "schema": {
+            "$ref": "#/backend/entities/UserProfile"
+          },
+          "description": "Stores user profile information. Owned by the user.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier of the user."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/public_profiles/{profileId}",
+        "definition": {
+          "entityName": "UserProfile",
+          "schema": {
+            "$ref": "#/backend/entities/UserProfile"
+          },
+          "description": "Stores public profile information, duplicated from user profiles. This supports public listing without requiring complex security rules.  Includes denormalized data from the user profile. Includes `profileId` as a parameter.",
+          "params": [
+            {
+              "name": "profileId",
+              "description": "The unique identifier of the public profile, corresponds to a userId."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/job_postings/{jobPostingId}",
+        "definition": {
+          "entityName": "JobPosting",
+          "schema": {
+            "$ref": "#/backend/entities/JobPosting"
+          },
+          "description": "Stores job postings. Includes `jobPostingId` as a parameter.",
+          "params": [
+            {
+              "name": "jobPostingId",
+              "description": "The unique identifier of the job posting."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/users/{userId}/messages/{messageId}",
+        "definition": {
+          "entityName": "Message",
+          "schema": {
+            "$ref": "#/backend/entities/Message"
+          },
+          "description": "Stores messages sent by the user. The same message is duplicated under the receiver's `users/{receiverId}/messages/{messageId}` collection to ensure authorization independence. Includes `userId` and `messageId` as parameters.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier of the user (sender)."
+            },
+            {
+              "name": "messageId",
+              "description": "The unique identifier of the message."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/applications/{applicationId}",
+        "definition": {
+          "entityName": "Application",
+          "schema": {
+            "$ref": "#/backend/entities/Application"
+          },
+          "description": "Stores job applications. Includes `applicationId` as a parameter.",
+          "params": [
+            {
+              "name": "applicationId",
+              "description": "The unique identifier of the application."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/users/{userId}/notifications/{notificationId}",
+        "definition": {
+          "entityName": "Notification",
+          "schema": {
+            "$ref": "#/backend/entities/Notification"
+          },
+          "description": "Stores notifications for a user. Includes `userId` and `notificationId` as parameters.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier of the user."
+            },
+            {
+              "name": "notificationId",
+              "description": "The unique identifier of the notification."
+            }
+          ]
+        }
+      }
+    ],
+    "reasoning": "The Firestore structure is designed to ensure authorization independence, clarity, and scalability for the CareerFlow Connect application. User profiles are stored under `/users/{userId}` to establish clear ownership. Public candidate profiles are enabled by a separate collection `/public_profiles/{profileId}` which duplicates relevant data from the user profile, ensuring that listing public profiles doesn't require filtering based on data content (QAP). Job postings are stored in `/job_postings/{jobPostingId}`. Direct messages are managed under `/users/{userId}/messages/{messageId}` which are accessible only to the sender, with a denormalized copy in the receiver's `/users/{receiverId}/messages/{messageId}` to avoid complex queries and maintain authorization independence. Job applications are stored under `/applications/{applicationId}`, including the `applicantId` and `jobPostingId` to track applications. Notifications are managed under `/users/{userId}/notifications/{notificationId}` to directly associate them with users. This design avoids hierarchical authorization dependencies by denormalizing data (e.g., copying user data to public profiles) and using path-based ownership where appropriate, thus supporting atomic operations and simplifying security rules."
+  }
+}
