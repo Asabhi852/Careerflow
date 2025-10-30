@@ -1,3 +1,5 @@
+"use client";
+import { useEffect, useState } from 'react';
 import { Logo } from '@/components/shared/logo';
 // @ts-ignore - Lucide icons import issue
 import { Github, Linkedin, Twitter } from 'lucide-react';
@@ -5,6 +7,10 @@ import Link from 'next/link';
 import { Button } from '../ui/button';
 
 export function SiteFooter() {
+  const [year, setYear] = useState<number | null>(null);
+  useEffect(() => {
+    setYear(new Date().getFullYear());
+  }, []);
   return (
     <footer className="border-t">
       <div className="container py-12">
@@ -53,7 +59,9 @@ export function SiteFooter() {
           </div>
         </div>
         <div className="mt-8 border-t pt-6 text-sm text-muted-foreground text-center">
-          © {new Date().getFullYear()} CareerFlow Connect. All rights reserved.
+          <span suppressHydrationWarning>
+            © {year ?? ''} CareerFlow Connect. All rights reserved.
+          </span>
         </div>
       </div>
     </footer>

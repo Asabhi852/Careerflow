@@ -11,8 +11,6 @@ import {
   SidebarFooter,
   SidebarInset,
   SidebarTrigger,
-  SheetTitle,
-  SheetHeader,
 } from '@/components/ui/sidebar';
 import { useUser, useAuth } from '@/firebase';
 import {
@@ -71,7 +69,7 @@ export default function DashboardLayout({
 
   return (
     <SidebarProvider>
-      <div className="flex min-h-screen flex-col">
+      <div className="flex min-h-screen flex-col bg-background text-foreground">
         {isMobile && (
           <header className="sticky top-0 z-40 flex h-14 items-center justify-between gap-4 border-b bg-background px-4 sm:static sm:h-auto sm:border-0 sm:bg-transparent sm:px-6">
             <Logo />
@@ -79,11 +77,6 @@ export default function DashboardLayout({
           </header>
         )}
         <Sidebar>
-          <SheetHeader>
-            <SheetTitle>
-              <Logo />
-            </SheetTitle>
-          </SheetHeader>
           <SidebarHeader>
             <Logo />
           </SidebarHeader>
@@ -101,23 +94,25 @@ export default function DashboardLayout({
                   AI Chatbot
                 </SidebarMenuButton>
               </SidebarMenuItem>
-              <SidebarMenu>
-                <h2 className="px-2 py-4 text-xs font-semibold text-muted-foreground">My Account</h2>
-                {menuItems.map(item => (
-                  <SidebarMenuItem key={item.href}>
-                    <SidebarMenuButton 
-                      href={item.href} 
-                      isActive={isMenuItemActive(item)}
-                    >
-                      <item.icon />
-                      {item.label}
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
-              </SidebarMenu>
+            </SidebarMenu>
+            <div className="px-2 py-2">
+              <h2 className="px-2 py-2 text-xs font-semibold text-muted-foreground">My Account</h2>
+            </div>
+            <SidebarMenu>
+              {menuItems.map(item => (
+                <SidebarMenuItem key={item.href}>
+                  <SidebarMenuButton 
+                    href={item.href} 
+                    isActive={isMenuItemActive(item)}
+                  >
+                    <item.icon />
+                    {item.label}
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
             </SidebarMenu>
           </SidebarContent>
-          <SidebarFooter className='items-center'>
+          <SidebarFooter className="items-center">
             {user && (
               <div className="flex items-center gap-3">
                 <Avatar className="h-8 w-8">

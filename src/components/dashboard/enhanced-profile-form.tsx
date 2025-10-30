@@ -19,12 +19,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from '@/hooks/use-toast';
 // @ts-ignore - Lucide icons import issue
-import { Loader2, Plus, X } from 'lucide-react';
-import type { UserProfile, WorkExperience, Certificate } from '@/lib/types';
+import { Loader2, Plus, X, GraduationCap } from 'lucide-react';
+import type { UserProfile, WorkExperience, Certificate, EducationDetail } from '@/lib/types';
 import { useFirestore, useUser, setDocumentNonBlocking } from '@/firebase';
 import { doc } from 'firebase/firestore';
 import { FileUpload } from '@/components/shared/file-upload';
+import { ResumeUpload } from '@/components/shared/resume-upload';
 import { useState } from 'react';
+import { UserAvatar } from '@/components/shared/user-avatar';
 
 const profileFormSchema = (z as any).object({
   firstName: (z as any).string().min(2, { message: 'First name must be at least 2 characters.' }),
@@ -56,6 +58,7 @@ export function EnhancedProfileForm({ userProfile }: EnhancedProfileFormProps) {
   const [videoUrls, setVideoUrls] = useState<string[]>(userProfile.videoUrls || []);
   const [workExperience, setWorkExperience] = useState<WorkExperience[]>(userProfile.workExperience || []);
   const [certificates, setCertificates] = useState<Certificate[]>(userProfile.certificates || []);
+  const [educationDetails, setEducationDetails] = useState<EducationDetail[]>(userProfile.educationDetails || []);
 
   const form = useForm<any>({
     resolver: zodResolver(profileFormSchema),
@@ -120,6 +123,168 @@ export function EnhancedProfileForm({ userProfile }: EnhancedProfileFormProps) {
     setVideoUrls(videoUrls.filter((_, i) => i !== index));
   };
 
+  const addEducation = () => {
+    setEducationDetails([
+      ...educationDetails,
+      { 
+        id: Date.now().toString(), 
+        level: 'Bachelors', 
+        institution: '', 
+        field: '', 
+        startYear: '', 
+        endYear: '', 
+        grade: '',
+        current: false 
+      },
+    ]);
+  };
+
+  const removeEducation = (index: number) => {
+    setEducationDetails(educationDetails.filter((_, i) => i !== index));
+  };
+
+  const updateEducation = (index: number, field: keyof EducationDetail, value: any) => {
+    const updated = [...educationDetails];
+    updated[index] = { ...updated[index], [field]: value };
+    setEducationDetails(updated);
+  };
+
+  const handleParsedResumeData = (parsedData: any) => {
+    // Auto-fill form fields with parsed data
+    if (parsedData.personalInfo) {
+      if (parsedData.personalInfo.firstName) {
+        form.setValue('firstName', parsedData.personalInfo.firstName);
+      }
+      if (parsedData.personalInfo.lastName) {
+        form.setValue('lastName', parsedData.personalInfo.lastName);
+      }
+      if (parsedData.personalInfo.phoneNumber) {
+        form.setValue('phoneNumber', parsedData.personalInfo.phoneNumber);
+      }
+      if (parsedData.personalInfo.location) {
+        form.setValue('location', parsedData.personalInfo.location);
+      }
+      if (parsedData.personalInfo.age) {
+        form.setValue('age', parsedData.personalInfo.age);
+      }
+    }
+
+    if (parsedData.professionalSummary) {
+      if (parsedData.professionalSummary.bio) {
+        form.setValue('bio', parsedData.professionalSummary.bio);
+      }
+      if (parsedData.professionalSummary.currentJobTitle) {
+        form.setValue('currentJobTitle', parsedData.professionalSummary.currentJobTitle);
+      }
+      if (parsedData.professionalSummary.currentCompany) {
+        form.setValue('currentCompany', parsedData.professionalSummary.currentCompany);
+      }
+    }
+
+    // Fill skills
+    if (parsedData.skills) {
+      const allSkills = [
+        ...(parsedData.skills.technical || []),
+        ...(parsedData.skills.soft || []),
+      ];
+      if (allSkills.length > 0) {
+        form.setValue('skills', allSkills.join(', '));
+      }
+      
+      // Fill languages
+      if (parsedData.skills.languages && parsedData.skills.languages.length > 0) {
+        form.setValue('languages', parsedData.skills.languages.join(', '));
+      }
+    }
+
+    // Fill education (old format for backward compatibility)
+    if (parsedData.education && parsedData.education.length > 0) {
+      const educationText = parsedData.education
+        .map((edu: any) => `${edu.degree} in ${edu.field} from ${edu.institution}${edu.graduationYear ? ` (${edu.graduationYear})` : ''}`)
+        .join('\n');
+      form.setValue('education', educationText);
+
+      // Fill detailed education
+      const formattedEducation = parsedData.education.map((edu: any, index: number) => {
+        // Determine education level based on degree
+        let level: 'SSC' | 'PUC' | 'Diploma' | 'Bachelors' | 'Masters' | 'PhD' | 'Other' = 'Bachelors';
+        const degreeStr = (edu.degree || '').toLowerCase();
+        
+        if (degreeStr.includes('10th') || degreeStr.includes('ssc') || degreeStr.includes('secondary')) {
+          level = 'SSC';
+        } else if (degreeStr.includes('12th') || degreeStr.includes('puc') || degreeStr.includes('higher secondary')) {
+          level = 'PUC';
+        } else if (degreeStr.includes('diploma')) {
+          level = 'Diploma';
+        } else if (degreeStr.includes('bachelor') || degreeStr.includes('b.tech') || degreeStr.includes('b.e') || degreeStr.includes('b.sc') || degreeStr.includes('b.a')) {
+          level = 'Bachelors';
+        } else if (degreeStr.includes('master') || degreeStr.includes('m.tech') || degreeStr.includes('m.e') || degreeStr.includes('m.sc') || degreeStr.includes('mba')) {
+          level = 'Masters';
+        } else if (degreeStr.includes('phd') || degreeStr.includes('doctorate')) {
+          level = 'PhD';
+        }
+
+        return {
+          id: Date.now().toString() + index,
+          level: level,
+          institution: edu.institution || '',
+          board: (level === 'SSC' || level === 'PUC') ? '' : undefined,
+          university: (level !== 'SSC' && level !== 'PUC') ? '' : undefined,
+          degree: edu.degree || '',
+          field: edu.field || '',
+          startYear: '',
+          endYear: edu.graduationYear || '',
+          grade: edu.gpa || '',
+          current: false,
+          achievements: '',
+        };
+      });
+      setEducationDetails(formattedEducation);
+    }
+
+    // Fill interests
+    if (parsedData.interests && parsedData.interests.length > 0) {
+      form.setValue('interests', parsedData.interests.join(', '));
+    }
+
+    // Fill work experience
+    if (parsedData.workExperience && parsedData.workExperience.length > 0) {
+      const formattedExperience = parsedData.workExperience.map((exp: any) => ({
+        company: exp.company || '',
+        position: exp.position || '',
+        startDate: exp.startDate || '',
+        endDate: exp.endDate || '',
+        description: exp.description || '',
+        current: exp.current || false,
+      }));
+      setWorkExperience(formattedExperience);
+    }
+
+    // Fill certificates
+    if (parsedData.certificates && parsedData.certificates.length > 0) {
+      const formattedCerts = parsedData.certificates.map((cert: any, index: number) => ({
+        id: Date.now().toString() + index,
+        name: cert.name || '',
+        issuer: cert.issuer || '',
+        issueDate: cert.issueDate || '',
+        expiryDate: cert.expiryDate || '',
+        credentialId: cert.credentialId || '',
+        certificateUrl: '',
+      }));
+      setCertificates(formattedCerts);
+    }
+
+    // Fill availability
+    if (parsedData.availability) {
+      form.setValue('availability', parsedData.availability);
+    }
+
+    // Fill expected salary
+    if (parsedData.expectedSalary) {
+      form.setValue('expectedSalary', parsedData.expectedSalary);
+    }
+  };
+
   function onSubmit(data: any) {
     if (!user || !firestore) {
       toast({
@@ -152,6 +317,7 @@ export function EnhancedProfileForm({ userProfile }: EnhancedProfileFormProps) {
       videoUrls,
       workExperience: workExperience.filter(exp => exp.company && exp.position),
       certificates: certificates.filter(cert => cert.name && cert.issuer),
+      educationDetails: educationDetails.filter(edu => edu.institution && edu.field),
       updatedAt: new Date().toISOString(),
     };
 
@@ -174,16 +340,31 @@ export function EnhancedProfileForm({ userProfile }: EnhancedProfileFormProps) {
             <CardDescription>Your personal details</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="space-y-2">
+            <div className="space-y-4">
               <FormLabel>Profile Picture</FormLabel>
-              <FileUpload
-                onUploadComplete={setProfilePictureUrl}
-                accept="image/*"
-                maxSize={5}
-                folder="profile-pictures"
-                label="Upload Profile Picture"
-                currentFile={profilePictureUrl}
-              />
+              <div className="flex items-center gap-6">
+                <div className="flex flex-col items-center gap-2">
+                  <UserAvatar 
+                    user={{
+                      firstName: userProfile.firstName,
+                      lastName: userProfile.lastName,
+                      profilePictureUrl: profilePictureUrl
+                    }}
+                    size="lg"
+                  />
+                  <p className="text-xs text-muted-foreground text-center">Preview</p>
+                </div>
+                <div className="flex-1">
+                  <FileUpload
+                    onUploadComplete={setProfilePictureUrl}
+                    accept="image/*"
+                    maxSize={5}
+                    folder="profile-pictures"
+                    label="Upload Profile Picture"
+                    currentFile={profilePictureUrl}
+                  />
+                </div>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -542,15 +723,190 @@ export function EnhancedProfileForm({ userProfile }: EnhancedProfileFormProps) {
           </CardContent>
         </Card>
 
+        {/* Education Details */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <GraduationCap className="h-5 w-5" />
+                  Education Details
+                </CardTitle>
+                <CardDescription>Add your educational qualifications (SSC, PUC, Degree, etc.)</CardDescription>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={addEducation}
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Add Education
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {educationDetails.map((edu, index) => (
+              <Card key={edu.id} className="border-l-4 border-l-blue-500">
+                <CardContent className="pt-4">
+                  <div className="flex justify-between items-start mb-4">
+                    <h4 className="font-medium text-blue-700">Education {index + 1}</h4>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => removeEducation(index)}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <FormLabel>Education Level *</FormLabel>
+                        <Select
+                          value={edu.level}
+                          onValueChange={(value) => updateEducation(index, 'level', value)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select level" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="SSC">SSC (10th)</SelectItem>
+                            <SelectItem value="PUC">PUC (12th)</SelectItem>
+                            <SelectItem value="Diploma">Diploma</SelectItem>
+                            <SelectItem value="Bachelors">Bachelor's Degree</SelectItem>
+                            <SelectItem value="Masters">Master's Degree</SelectItem>
+                            <SelectItem value="PhD">PhD</SelectItem>
+                            <SelectItem value="Other">Other</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <FormLabel>Institution/School/College *</FormLabel>
+                        <Input
+                          placeholder="e.g., ABC High School, XYZ University"
+                          value={edu.institution}
+                          onChange={(e) => updateEducation(index, 'institution', e.target.value)}
+                        />
+                      </div>
+                    </div>
+
+                    {(edu.level === 'SSC' || edu.level === 'PUC') && (
+                      <div>
+                        <FormLabel>Board</FormLabel>
+                        <Input
+                          placeholder="e.g., CBSE, State Board, ICSE"
+                          value={edu.board || ''}
+                          onChange={(e) => updateEducation(index, 'board', e.target.value)}
+                        />
+                      </div>
+                    )}
+
+                    {(edu.level === 'Bachelors' || edu.level === 'Masters' || edu.level === 'PhD' || edu.level === 'Diploma') && (
+                      <>
+                        <div>
+                          <FormLabel>University</FormLabel>
+                          <Input
+                            placeholder="e.g., University of Mumbai"
+                            value={edu.university || ''}
+                            onChange={(e) => updateEducation(index, 'university', e.target.value)}
+                          />
+                        </div>
+                        <div>
+                          <FormLabel>Degree</FormLabel>
+                          <Input
+                            placeholder="e.g., Bachelor of Science, Master of Technology"
+                            value={edu.degree || ''}
+                            onChange={(e) => updateEducation(index, 'degree', e.target.value)}
+                          />
+                        </div>
+                      </>
+                    )}
+
+                    <div>
+                      <FormLabel>Field of Study/Major *</FormLabel>
+                      <Input
+                        placeholder="e.g., Computer Science, Mathematics"
+                        value={edu.field}
+                        onChange={(e) => updateEducation(index, 'field', e.target.value)}
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      <div>
+                        <FormLabel>Start Year</FormLabel>
+                        <Input
+                          type="text"
+                          placeholder="2018"
+                          value={edu.startYear}
+                          onChange={(e) => updateEducation(index, 'startYear', e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <FormLabel>End Year</FormLabel>
+                        <Input
+                          type="text"
+                          placeholder="2022"
+                          value={edu.endYear || ''}
+                          onChange={(e) => updateEducation(index, 'endYear', e.target.value)}
+                          disabled={edu.current}
+                        />
+                      </div>
+                      <div>
+                        <FormLabel>Grade/Percentage/CGPA</FormLabel>
+                        <Input
+                          placeholder="e.g., 85%, 8.5 CGPA"
+                          value={edu.grade || ''}
+                          onChange={(e) => updateEducation(index, 'grade', e.target.value)}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        id={`edu-current-${index}`}
+                        checked={edu.current || false}
+                        onChange={(e) => updateEducation(index, 'current', e.target.checked)}
+                        className="rounded border-gray-300"
+                      />
+                      <label htmlFor={`edu-current-${index}`} className="text-sm">
+                        Currently pursuing
+                      </label>
+                    </div>
+
+                    <div>
+                      <FormLabel>Achievements/Honors (Optional)</FormLabel>
+                      <Textarea
+                        placeholder="Any special achievements, honors, or awards"
+                        value={edu.achievements || ''}
+                        onChange={(e) => updateEducation(index, 'achievements', e.target.value)}
+                        className="resize-none"
+                        rows={2}
+                      />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </CardContent>
+        </Card>
+
         {/* Certificates */}
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle>Certificates</CardTitle>
-                <CardDescription>Your certifications and credentials</CardDescription>
+                <CardTitle>Certifications</CardTitle>
+                <CardDescription>Add your professional certifications</CardDescription>
               </div>
-              <Button type="button" variant="outline" size="sm" onClick={addCertificate}>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={addCertificate}
+              >
                 <Plus className="h-4 w-4 mr-2" />
                 Add Certificate
               </Button>
@@ -641,14 +997,15 @@ export function EnhancedProfileForm({ userProfile }: EnhancedProfileFormProps) {
           <CardContent className="space-y-4">
             <div>
               <FormLabel>Resume</FormLabel>
-              <FileUpload
+              <ResumeUpload
                 onUploadComplete={setResumeUrl}
-                accept=".pdf,.doc,.docx"
-                maxSize={10}
-                folder="resumes"
-                label="Upload Resume"
+                onParsedData={handleParsedResumeData}
                 currentFile={resumeUrl}
+                enableParsing={true}
               />
+              <p className="text-xs text-muted-foreground mt-2">
+                Upload your resume to automatically fill your profile information
+              </p>
             </div>
 
             <div>

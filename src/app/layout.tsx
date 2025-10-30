@@ -4,6 +4,7 @@ import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
 import { Providers } from '@/components/providers';
 import { FirebaseClientProvider } from '@/firebase';
+import { FloatingChatbot } from '@/components/chatbot/floating-chatbot';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -33,6 +34,7 @@ export default function RootLayout({
         <FirebaseClientProvider>
           <Providers>
             {children}
+            <FloatingChatbot />
             <Toaster />
           </Providers>
         </FirebaseClientProvider>

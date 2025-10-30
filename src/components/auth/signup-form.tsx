@@ -61,12 +61,14 @@ export function SignupForm() {
   const firestore = useFirestore();
   const router = useRouter();
   const [resumeFile, setResumeFile] = useState<File | null>(null);
+  const [isParsing, setIsParsing] = useState(false);
   const [workExperience, setWorkExperience] = useState<Array<{
     company: string;
     position: string;
     startDate: string;
     endDate: string;
     description: string;
+    current?: boolean;
   }>>([]);
 
   const form = useForm<any>({
@@ -93,7 +95,7 @@ export function SignupForm() {
 
   const userType = form.watch('userType');
 
-  const handleResumeUpload = (event: any) => {
+  const handleResumeUpload = async (event: any) => {
     const file = event.target.files?.[0];
     if (file) {
       if (file.size > 5 * 1024 * 1024) { // 5MB limit
@@ -105,7 +107,189 @@ export function SignupForm() {
         return;
       }
       setResumeFile(file);
+      
+      // Parse resume and auto-fill form
+      await parseResumeAndFillForm(file);
     }
+  };
+
+  const parseResumeAndFillForm = async (file: File) => {
+    setIsParsing(true);
+    try {
+      // Extract text from the resume file
+      const resumeText = await extractTextFromFile(file);
+      
+      if (!resumeText || resumeText.trim().length < 50) {
+        toast({
+          variant: 'destructive',
+          title: 'Unable to parse resume',
+          description: 'Could not extract text from the resume. Please fill the form manually.',
+        });
+        setIsParsing(false);
+        return;
+      }
+
+      // Call API route to parse resume
+      const response = await fetch('/api/parse-resume', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ resumeText }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to parse resume');
+      }
+
+      const result = await response.json();
+      const parsedData = result.data;
+      
+      // Auto-fill form fields with parsed data
+      if (parsedData.personalInfo) {
+        if (parsedData.personalInfo.firstName) {
+          form.setValue('firstName', parsedData.personalInfo.firstName);
+        }
+        if (parsedData.personalInfo.lastName) {
+          form.setValue('lastName', parsedData.personalInfo.lastName);
+        }
+        if (parsedData.personalInfo.email) {
+          form.setValue('email', parsedData.personalInfo.email);
+        }
+        if (parsedData.personalInfo.phoneNumber) {
+          // Store phone number if needed (add to form schema)
+        }
+        if (parsedData.personalInfo.location) {
+          form.setValue('location', parsedData.personalInfo.location);
+        }
+        if (parsedData.personalInfo.age) {
+          form.setValue('age', parsedData.personalInfo.age);
+        }
+      }
+
+      if (parsedData.professionalSummary) {
+        if (parsedData.professionalSummary.currentJobTitle) {
+          form.setValue('currentJobTitle', parsedData.professionalSummary.currentJobTitle);
+        }
+        if (parsedData.professionalSummary.currentCompany) {
+          form.setValue('currentCompany', parsedData.professionalSummary.currentCompany);
+        }
+      }
+
+      // Fill skills
+      if (parsedData.skills) {
+        const allSkills = [
+          ...(parsedData.skills.technical || []),
+          ...(parsedData.skills.soft || []),
+        ];
+        if (allSkills.length > 0) {
+          form.setValue('skills', allSkills.join(', '));
+        }
+      }
+
+      // Fill education
+      if (parsedData.education && parsedData.education.length > 0) {
+        const educationText = parsedData.education
+          .map(edu => `${edu.degree} in ${edu.field} from ${edu.institution}${edu.graduationYear ? ` (${edu.graduationYear})` : ''}`)
+          .join('\n');
+        form.setValue('education', educationText);
+      }
+
+      // Fill interests
+      if (parsedData.interests && parsedData.interests.length > 0) {
+        form.setValue('interests', parsedData.interests.join(', '));
+      }
+
+      // Fill work experience
+      if (parsedData.workExperience && parsedData.workExperience.length > 0) {
+        const formattedExperience = parsedData.workExperience.map(exp => ({
+          company: exp.company || '',
+          position: exp.position || '',
+          startDate: exp.startDate || '',
+          endDate: exp.endDate || '',
+          description: exp.description || '',
+          current: exp.current || false,
+        }));
+        setWorkExperience(formattedExperience);
+      }
+
+      toast({
+        title: 'Resume parsed successfully!',
+        description: 'Your information has been automatically filled. Please review and update as needed.',
+      });
+    } catch (error: any) {
+      console.error('Resume parsing error:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Resume parsing failed',
+        description: 'Could not parse your resume. Please fill the form manually.',
+      });
+    } finally {
+      setIsParsing(false);
+    }
+  };
+
+  const extractTextFromFile = async (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      
+      reader.onload = async (e) => {
+        try {
+          const content = e.target?.result;
+          
+          if (file.type === 'application/pdf') {
+            // For PDF files, use pdfjs-dist
+            try {
+              const pdfjsLib = await import('pdfjs-dist');
+              
+              // Set worker source
+              pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+              
+              const typedArray = new Uint8Array(content as ArrayBuffer);
+              const pdf = await pdfjsLib.getDocument({ data: typedArray }).promise;
+              
+              let fullText = '';
+              
+              // Extract text from each page
+              for (let i = 1; i <= pdf.numPages; i++) {
+                const page = await pdf.getPage(i);
+                const textContent = await page.getTextContent();
+                const pageText = textContent.items
+                  .map((item: any) => item.str)
+                  .join(' ');
+                fullText += pageText + '\n';
+              }
+              
+              resolve(fullText);
+            } catch (pdfError) {
+              console.error('PDF parsing error:', pdfError);
+              reject(new Error('Failed to parse PDF file'));
+            }
+          } else if (file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || 
+                     file.type === 'application/msword') {
+            // For Word documents, read as text (basic implementation)
+            // For better parsing, consider using mammoth.js
+            const text = content as string;
+            resolve(text);
+          } else {
+            // For plain text files
+            resolve(content as string);
+          }
+        } catch (error) {
+          reject(error);
+        }
+      };
+      
+      reader.onerror = () => reject(new Error('Failed to read file'));
+      
+      // Read as ArrayBuffer for PDF, text for others
+      if (file.type === 'application/pdf') {
+        reader.readAsArrayBuffer(file);
+      } else {
+        reader.readAsText(file);
+      }
+    });
   };
 
   const addWorkExperience = () => {
@@ -185,7 +369,7 @@ export function SignupForm() {
           title: 'Account Created',
           description: 'You have successfully signed up.',
         });
-        router.push('/');
+        router.push('/home');
       }
     } catch (error: any) {
       if (error.code === 'auth/email-already-in-use') {
@@ -358,19 +542,29 @@ export function SignupForm() {
                 <div className="flex items-center space-x-2">
                   <Input
                     type="file"
-                    accept=".pdf,.doc,.docx"
+                    accept=".pdf,.doc,.docx,.txt"
                     onChange={handleResumeUpload}
                     className="hidden"
                     id="resume-upload"
+                    disabled={isParsing}
                   />
                   <label
                     htmlFor="resume-upload"
-                    className="flex items-center space-x-2 px-4 py-2 border border-dashed border-gray-300 rounded-md cursor-pointer hover:bg-gray-50"
+                    className={`flex items-center space-x-2 px-4 py-2 border border-dashed border-gray-300 rounded-md cursor-pointer hover:bg-gray-50 flex-1 ${isParsing ? 'opacity-50 cursor-not-allowed' : ''}`}
                   >
-                    <Upload className="h-4 w-4" />
-                    <span>{resumeFile ? resumeFile.name : 'Upload Resume'}</span>
+                    {isParsing ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <span>Parsing resume...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="h-4 w-4" />
+                        <span>{resumeFile ? resumeFile.name : 'Upload Resume'}</span>
+                      </>
+                    )}
                   </label>
-                  {resumeFile && (
+                  {resumeFile && !isParsing && (
                     <Button
                       type="button"
                       variant="outline"
@@ -382,7 +576,7 @@ export function SignupForm() {
                   )}
                 </div>
                 <FormDescription>
-                  Upload your resume (PDF, DOC, DOCX) - Max 5MB
+                  Upload your resume (PDF, DOC, DOCX, TXT) - Max 5MB. Your information will be automatically filled.
                 </FormDescription>
               </div>
 

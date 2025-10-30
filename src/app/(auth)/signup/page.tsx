@@ -20,7 +20,7 @@ export default function SignupPage() {
   useEffect(() => {
     // Only run this effect on the client-side after hydration
     if (typeof window !== 'undefined' && !isUserLoading && user) {
-      router.replace('/dashboard');
+      router.replace('/home');
     }
   }, [user, isUserLoading, router]);
 

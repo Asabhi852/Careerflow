@@ -1,0 +1,36 @@
+rules_version = '2';
+
+// Firebase Storage Security Rules
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Allow authenticated users to upload files to their own folders
+    match /{allPaths=**} {
+      allow read: if true; // Allow public read access for profile pictures
+      allow write: if request.auth != null; // Only authenticated users can upload
+    }
+    
+    // Specific rules for profile pictures
+    match /profile-pictures/{userId}/{fileName} {
+      allow read: if true; // Public read access for profile pictures
+      allow write: if request.auth != null && request.auth.uid == userId; // Only the user can upload to their own folder
+    }
+    
+    // Rules for other file types
+    match /uploads/{userId}/{fileName} {
+      allow read: if true; // Public read access
+      allow write: if request.auth != null && request.auth.uid == userId; // Only the user can upload to their own folder
+    }
+    
+    // Rules for resumes
+    match /resumes/{userId}/{fileName} {
+      allow read: if true; // Public read access for resumes
+      allow write: if request.auth != null && request.auth.uid == userId; // Only the user can upload to their own folder
+    }
+    
+    // Rules for certificates
+    match /certificates/{userId}/{fileName} {
+      allow read: if true; // Public read access for certificates
+      allow write: if request.auth != null && request.auth.uid == userId; // Only the user can upload to their own folder
+    }
+  }
+}

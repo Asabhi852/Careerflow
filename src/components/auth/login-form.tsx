@@ -38,19 +38,42 @@ export function LoginForm() {
   });
 
   async function onSubmit(values: any) {
-    if (!auth) return;
+    if (!auth) {
+      toast({
+        variant: 'destructive',
+        title: 'Authentication Error',
+        description: 'Firebase Auth is not initialized. Please refresh the page.',
+      });
+      return;
+    }
+    
     try {
       await signInWithEmailAndPassword(auth, values.email, values.password);
       toast({
         title: 'Login Successful',
         description: 'You are now logged in.',
       });
-      router.push('/');
+      router.push('/home');
     } catch (error: any) {
+      console.error('Login error:', error);
+      let errorMessage = 'Could not sign in.';
+      
+      if (error.code === 'auth/network-request-failed') {
+        errorMessage = 'Network error. Please check your internet connection.';
+      } else if (error.code === 'auth/user-not-found') {
+        errorMessage = 'No account found with this email.';
+      } else if (error.code === 'auth/wrong-password') {
+        errorMessage = 'Incorrect password.';
+      } else if (error.code === 'auth/invalid-email') {
+        errorMessage = 'Invalid email address.';
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
       toast({
         variant: 'destructive',
-        title: 'Uh oh! Something went wrong.',
-        description: error.message || 'Could not sign in.',
+        title: 'Login Failed',
+        description: errorMessage,
       });
     }
   }

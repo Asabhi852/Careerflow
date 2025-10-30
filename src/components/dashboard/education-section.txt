@@ -1,0 +1,169 @@
+        {/* Education Details */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <GraduationCap className="h-5 w-5" />
+                  Education Details
+                </CardTitle>
+                <CardDescription>Add your educational qualifications (SSC, PUC, Degree, etc.)</CardDescription>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={addEducation}
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Add Education
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {educationDetails.map((edu, index) => (
+              <Card key={edu.id} className="border-l-4 border-l-blue-500">
+                <CardContent className="pt-4">
+                  <div className="flex justify-between items-start mb-4">
+                    <h4 className="font-medium text-blue-700">Education {index + 1}</h4>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => removeEducation(index)}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <FormLabel>Education Level *</FormLabel>
+                        <Select
+                          value={edu.level}
+                          onValueChange={(value) => updateEducation(index, 'level', value)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select level" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="SSC">SSC (10th)</SelectItem>
+                            <SelectItem value="PUC">PUC (12th)</SelectItem>
+                            <SelectItem value="Diploma">Diploma</SelectItem>
+                            <SelectItem value="Bachelors">Bachelor's Degree</SelectItem>
+                            <SelectItem value="Masters">Master's Degree</SelectItem>
+                            <SelectItem value="PhD">PhD</SelectItem>
+                            <SelectItem value="Other">Other</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <FormLabel>Institution/School/College *</FormLabel>
+                        <Input
+                          placeholder="e.g., ABC High School, XYZ University"
+                          value={edu.institution}
+                          onChange={(e) => updateEducation(index, 'institution', e.target.value)}
+                        />
+                      </div>
+                    </div>
+
+                    {(edu.level === 'SSC' || edu.level === 'PUC') && (
+                      <div>
+                        <FormLabel>Board</FormLabel>
+                        <Input
+                          placeholder="e.g., CBSE, State Board, ICSE"
+                          value={edu.board || ''}
+                          onChange={(e) => updateEducation(index, 'board', e.target.value)}
+                        />
+                      </div>
+                    )}
+
+                    {(edu.level === 'Bachelors' || edu.level === 'Masters' || edu.level === 'PhD' || edu.level === 'Diploma') && (
+                      <>
+                        <div>
+                          <FormLabel>University</FormLabel>
+                          <Input
+                            placeholder="e.g., University of Mumbai"
+                            value={edu.university || ''}
+                            onChange={(e) => updateEducation(index, 'university', e.target.value)}
+                          />
+                        </div>
+                        <div>
+                          <FormLabel>Degree</FormLabel>
+                          <Input
+                            placeholder="e.g., Bachelor of Science, Master of Technology"
+                            value={edu.degree || ''}
+                            onChange={(e) => updateEducation(index, 'degree', e.target.value)}
+                          />
+                        </div>
+                      </>
+                    )}
+
+                    <div>
+                      <FormLabel>Field of Study/Major *</FormLabel>
+                      <Input
+                        placeholder="e.g., Computer Science, Mathematics"
+                        value={edu.field}
+                        onChange={(e) => updateEducation(index, 'field', e.target.value)}
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      <div>
+                        <FormLabel>Start Year</FormLabel>
+                        <Input
+                          type="text"
+                          placeholder="2018"
+                          value={edu.startYear}
+                          onChange={(e) => updateEducation(index, 'startYear', e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <FormLabel>End Year</FormLabel>
+                        <Input
+                          type="text"
+                          placeholder="2022"
+                          value={edu.endYear || ''}
+                          onChange={(e) => updateEducation(index, 'endYear', e.target.value)}
+                          disabled={edu.current}
+                        />
+                      </div>
+                      <div>
+                        <FormLabel>Grade/Percentage/CGPA</FormLabel>
+                        <Input
+                          placeholder="e.g., 85%, 8.5 CGPA"
+                          value={edu.grade || ''}
+                          onChange={(e) => updateEducation(index, 'grade', e.target.value)}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        id={`edu-current-${index}`}
+                        checked={edu.current || false}
+                        onChange={(e) => updateEducation(index, 'current', e.target.checked)}
+                        className="rounded border-gray-300"
+                      />
+                      <label htmlFor={`edu-current-${index}`} className="text-sm">
+                        Currently pursuing
+                      </label>
+                    </div>
+
+                    <div>
+                      <FormLabel>Achievements/Honors (Optional)</FormLabel>
+                      <Textarea
+                        placeholder="Any special achievements, honors, or awards"
+                        value={edu.achievements || ''}
+                        onChange={(e) => updateEducation(index, 'achievements', e.target.value)}
+                        className="resize-none"
+                        rows={2}
+                      />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </CardContent>
+        </Card>

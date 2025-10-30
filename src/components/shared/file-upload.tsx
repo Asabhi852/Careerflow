@@ -68,23 +68,46 @@ export function FileUpload({
     setUploading(true);
     try {
       const { storage } = initializeFirebase();
+      
+      if (!storage) {
+        throw new Error('Firebase Storage is not initialized. Please check your configuration.');
+      }
+
       const timestamp = Date.now();
       const fileName = `${timestamp}_${file.name}`;
       const storageRef = ref(storage, `${folder}/${user.uid}/${fileName}`);
 
+      console.log('Uploading file to:', `${folder}/${user.uid}/${fileName}`);
+      
       await uploadBytes(storageRef, file);
       const downloadURL = await getDownloadURL(storageRef);
 
+      console.log('File uploaded successfully:', downloadURL);
+      
       onUploadComplete(downloadURL);
       toast({
         title: 'Upload successful',
         description: 'Your file has been uploaded.',
       });
     } catch (error: any) {
+      console.error('Upload error:', error);
+      
+      let errorMessage = 'Could not upload file.';
+      
+      if (error.code === 'storage/unauthorized') {
+        errorMessage = 'You are not authorized to upload files. Please log in again.';
+      } else if (error.code === 'storage/object-not-found') {
+        errorMessage = 'Storage bucket not found. Please check Firebase configuration.';
+      } else if (error.code === 'storage/quota-exceeded') {
+        errorMessage = 'Storage quota exceeded. Please contact support.';
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
       toast({
         variant: 'destructive',
         title: 'Upload failed',
-        description: error.message || 'Could not upload file.',
+        description: errorMessage,
       });
     } finally {
       setUploading(false);

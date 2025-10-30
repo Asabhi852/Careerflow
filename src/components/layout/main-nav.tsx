@@ -5,17 +5,30 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { useUser } from '@/firebase';
+import { useState, useEffect } from 'react';
+import { useI18n } from '../../i18n/I18nProvider';
 
 export function MainNav() {
   const pathname = usePathname();
   const { user } = useUser();
+  const [isMounted, setIsMounted] = useState(false);
+  const { t } = useI18n();
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+  
+  // Don't show navigation on landing page for non-logged in users (only after mount)
+  const isLandingPage = pathname === '/';
+  if (isLandingPage && isMounted && !user) {
+    return null;
+  }
 
   const navItems = [
-    { href: '/jobs', label: 'Find Jobs' },
-    { href: '/candidates', label: 'Find Candidates' },
-    { href: '/ai-matches', label: 'AI Matches' },
-    { href: '/chatbot', label: 'Chatbot' },
-    ...(user ? [{ href: '/dashboard', label: 'Dashboard' }] : []),
+    { href: '/jobs', label: t('nav_jobs', 'Jobs') },
+    { href: '/posts', label: t('nav_posts', 'Posts') },
+    { href: '/ai-match', label: t('nav_ai_match', 'AI Match') },
+    { href: '/candidates', label: t('nav_candidates', 'Candidates') },
   ];
 
 

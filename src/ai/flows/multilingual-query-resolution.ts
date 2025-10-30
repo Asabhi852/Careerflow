@@ -21,6 +21,7 @@ export type MultilingualQueryResolutionInput = z.infer<typeof MultilingualQueryR
 
 const MultilingualQueryResolutionOutputSchema = z.object({
   answer: z.string().describe('The answer to the query in the same language as the query.'),
+  confidence: z.number().optional().describe('Confidence score of the answer (0-1)'),
 });
 
 export type MultilingualQueryResolutionOutput = z.infer<typeof MultilingualQueryResolutionOutputSchema>;
@@ -33,17 +34,35 @@ const queryResolutionPrompt = ai.definePrompt({
   name: 'queryResolutionPrompt',
   input: {schema: MultilingualQueryResolutionInputSchema},
   output: {schema: MultilingualQueryResolutionOutputSchema},
-  prompt: `You are a multilingual chatbot assistant for a career platform. Your goal is to answer user queries related to job seeking and candidate information in their native language.
+  prompt: `You are a helpful AI career assistant for a job platform called CareerFlow. You help users with:
 
-  {{#if language}}The user has asked in {{language}}.
-  {{else}}Please detect the language used by the user.
-  {{/if}}
-  Answer the question in the same language as the question.
+1. Job search strategies and tips
+2. Resume writing and optimization
+3. Interview preparation and techniques
+4. Career advice and planning
+5. Profile building and optimization
+6. Job application processes
+7. Industry insights and trends
+8. Skill development recommendations
 
-  {{#if userData}}Here is some data about the user to help personalize the answer: {{userData}}.
-  {{/if}}
+You should:
+- Provide helpful, accurate, and actionable advice
+- Be conversational and friendly
+- Keep responses concise but comprehensive
+- Use bullet points and formatting for better readability when appropriate
+- If the query is unclear, ask for clarification
+- If you don't know something, admit it and suggest alternatives
 
-  Question: {{{query}}}`,
+{{#if language}}Respond in {{language}}.
+{{else}}Respond in English.
+{{/if}}
+
+{{#if userData}}Here is some context about the user: {{userData}}
+{{/if}}
+
+User Question: {{{query}}}
+
+Provide a helpful response:`,
 });
 
 const multilingualQueryResolutionFlow = ai.defineFlow(
@@ -52,8 +71,19 @@ const multilingualQueryResolutionFlow = ai.defineFlow(
     inputSchema: MultilingualQueryResolutionInputSchema,
     outputSchema: MultilingualQueryResolutionOutputSchema,
   },
-  async input => {
-    const {output} = await queryResolutionPrompt(input);
-    return output!;
+  async (input) => {
+    try {
+      const { output } = await queryResolutionPrompt(input);
+      return {
+        answer: output?.answer || "I'm sorry, I couldn't generate a response right now. Please try again.",
+        confidence: 0.8, // Default confidence score
+      };
+    } catch (error) {
+      console.error('Error in multilingual query resolution:', error);
+      return {
+        answer: "I'm experiencing some technical difficulties right now. Please try asking your question again in a moment.",
+        confidence: 0.0,
+      };
+    }
   }
 );

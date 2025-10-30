@@ -1,153 +1,116 @@
-/**
- * @fileoverview Firestore Security Rules for CareerFlow Connect.
- *
- * Core Philosophy:
- * This ruleset enforces a strict user-ownership model for private user data
- * and allows public read access to job postings and public profiles. Data
- * is denormalized where necessary to avoid complex queries in rules.
- *
- * Data Structure:
- * - /users/{userId}: Stores private user profile data, owned by the user.
- * - /public_profiles/{profileId}: Stores public, denormalized user profile data for public listing.
- * - /job_postings/{jobPostingId}: Stores job postings, publicly readable.
- * - /users/{userId}/messages/{messageId}: Stores messages sent by the user, mirrored to the receiver.
- * - /applications/{applicationId}: Stores job applications.
- * - /users/{userId}/notifications/{notificationId}: Stores user-specific notifications.
- *
- * Key Security Decisions:
- * - Users can only read/write their own profile data under /users/{userId}.
- * - Public profiles under /public_profiles/{profileId} are publicly readable.
- * - Job postings under /job_postings/{jobPostingId} are publicly readable.
- * - Messages are only accessible to the sender and receiver (via denormalization).
- * - Listing user profiles is disallowed unless accessing the /public_profiles/{profileId} collection.
- * - All write operations require a valid, authenticated user.
- *
- * Denormalization for Authorization:
- * - Messages: Messages are duplicated under both the sender and receiver's user IDs to ensure
- *   authorization independence. This avoids needing to query across different user paths to
- *   verify access.
- * - Public Profiles: Data is copied to the `/public_profiles` collection to enable public `list` operations without complex security rules or checks.
- */
 rules_version = '2';
+
+// Firestore Database Rules
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    /**
-     * @description Manages access to user profile documents. Only the authenticated user can read or write their own profile.
-     * @path /users/{userId}
-     * @allow (create, update, get, delete) if the user is signed in and the userId matches the authenticated user's ID.
-     * @deny (create, update, get, delete) if the userId does not match the authenticated user's ID.
-     * @principle Enforces document ownership for user profiles.
-     */
+    
+    // Posts collection - Public read, authenticated write
+    match /posts/{postId} {
+      allow read: if true; // Anyone can read posts
+      allow create: if request.auth != null; // Only authenticated users can create
+      allow update, delete: if request.auth != null && request.auth.uid == resource.data.authorId; // Only author can update/delete
+    }
+    
+    // Users collection - Private
     match /users/{userId} {
-      function isOwner(userId) {
-        return request.auth != null && request.auth.uid == userId;
+      allow read: if request.auth != null && request.auth.uid == userId; // Users can read their own data
+      allow write: if request.auth != null && request.auth.uid == userId; // Users can write their own data
+      
+      // Nested collections in users
+      match /notifications/{notificationId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
       }
-      function isSignedIn() {
-        return request.auth != null;
+      
+      match /messages/{messageId} {
+        // Receiver can read their messages
+        allow read: if request.auth != null && request.auth.uid == userId;
+        // Allow owner to manage their messages
+        allow update, delete: if request.auth != null && request.auth.uid == userId;
+        // Allow writes in two cases:
+        // 1) Sender writes a copy to their own messages subcollection (outbox)
+        // 2) Sender writes to receiver's messages subcollection (inbox)
+        allow write: if request.auth != null && (
+                        (
+                          // Sender writing to their own path
+                          request.auth.uid == userId &&
+                          request.resource.data.senderId == request.auth.uid
+                        ) || (
+                          // Sender writing to receiver's path
+                          request.resource.data.senderId == request.auth.uid &&
+                          request.resource.data.receiverId == userId
+                        )
+                      );
       }
-
-      allow get: if isOwner(userId);
-      allow list: if false; // Listing user profiles is not allowed.
-
-      allow create: if isSignedIn() && request.auth.uid == userId;
-      allow update: if isOwner(userId);
-      allow delete: if isOwner(userId) && existsAfter(/databases/$(database)/documents/users/$(userId)); // Document must exist to be deleted
-
     }
-
-    /**
-     * @description Manages access to public profile documents. Public profiles are publicly readable, but only the corresponding user can create, update, or delete them.
-     * @path /public_profiles/{profileId}
-     * @allow (get, list) Public read access.
-     * @allow (create, update, delete) if the user is signed in and the profileId matches the authenticated user's ID.
-     * @deny (create, update, delete) if the profileId does not match the authenticated user's ID.
-     * @principle Enables public listing of profiles while maintaining ownership control.
-     */
-    match /public_profiles/{profileId} {
-      function isOwner(profileId) {
-        return request.auth != null && request.auth.uid == profileId;
-      }
-       function isSignedIn() {
-        return request.auth != null;
-      }
-
-      allow get, list: if true;
-
-      allow create: if isSignedIn() && isOwner(profileId);
-      allow update: if isOwner(profileId);
-      allow delete: if isOwner(profileId) && existsAfter(/databases/$(database)/documents/public_profiles/$(profileId)); // Document must exist to be deleted
+    
+    // Public profiles - Public read, owner write
+    match /public_profiles/{userId} {
+      allow read: if true; // Anyone can read public profiles
+      allow write: if request.auth != null && request.auth.uid == userId; // Only owner can write
     }
-
-    /**
-     * @description Manages access to job posting documents. Job postings are publicly readable but creation is not restricted.
-     * @path /job_postings/{jobPostingId}
-     * @allow (get, list) Public read access.
-     * @allow (create) Public create access.
-     * @allow (update, delete) if false.
-     * @principle Enables public listing of job postings.
-     */
-    match /job_postings/{jobPostingId} {
-       function isSignedIn() {
-        return request.auth != null;
-      }
-      allow get, list: if true;
-      allow create: if isSignedIn(); // TODO: In the next iteration, limit job postings to signed-in users who have a valid employer profile.
-      allow update, delete: if false;
+    
+    // Job postings - Public read, authenticated write
+    match /job_postings/{jobId} {
+      allow read: if true; // Anyone can read job postings
+      allow create: if request.auth != null; // Authenticated users can create
+      allow update, delete: if request.auth != null && request.auth.uid == resource.data.posterId; // Only poster can update/delete
     }
-
-    /**
-     * @description Manages access to message documents. Only the sender can create a message, and both sender and receiver can read their respective copies of the message.
-     * @path /users/{userId}/messages/{messageId}
-     * @allow (create) if the user is the sender.
-     * @allow (get) if the user is the sender or the receiver.
-     * @deny (list, update, delete) Always deny listing, updating, or deleting messages via this path.
-     * @principle Enforces sender-only creation and read access for both sender and receiver through data duplication.
-     */
-    match /users/{userId}/messages/{messageId} {
-      function isOwner(userId) {
-        return request.auth != null && request.auth.uid == userId;
-      }
-
-      allow get: if isOwner(userId) || (request.auth.uid != null && request.auth.uid == resource.data.receiverId);
-      allow list: if false; // Listing messages is not allowed.
-
-      allow create: if isOwner(userId);
-      allow update, delete: if false;
-    }
-
-    /**
-     * @description Manages access to application documents.
-     * @path /applications/{applicationId}
-     * @allow (get, list, create) if true
-     * @allow (update, delete) if false
-     */
+    
+    // Applications - Private
     match /applications/{applicationId} {
-       function isSignedIn() {
-        return request.auth != null;
-      }
-      allow get, list: if true;
-      allow create: if isSignedIn();
-      allow update, delete: if false;
+      allow read: if request.auth != null && 
+                  (request.auth.uid == resource.data.applicantId || 
+                   request.auth.uid == resource.data.posterId);
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.applicantId;
+      allow update: if request.auth != null && 
+                    (request.auth.uid == resource.data.applicantId || 
+                     request.auth.uid == resource.data.posterId);
+      allow delete: if request.auth != null && request.auth.uid == resource.data.applicantId;
     }
+    
+    // Conversations - Private between participants
+    match /conversations/{conversationId} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}
 
-    /**
-     * @description Manages access to notification documents. Only the user to whom the notification belongs can read or modify it.
-     * @path /users/{userId}/notifications/{notificationId}
-     *   the userId matches the authenticated user's ID.
-     * @principle Enforces document ownership for notifications.
-     */
-    match /users/{userId}/notifications/{notificationId} {
-        function isOwner(userId) {
-            return request.auth != null && request.auth.uid == userId;
-        }
-
-        allow get: if isOwner(userId);
-        allow list: if isOwner(userId); // Only the user can list their own notifications
-
-        allow create: if isOwner(userId);
-        allow update: if isOwner(userId);
-        allow delete: if isOwner(userId) && existsAfter(/databases/$(database)/documents/users/$(userId)/notifications/$(notificationId));
+// Firebase Storage Rules
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Resumes
+    match /resumes/{userId}/{fileName} {
+      allow read: if true; // Public read for resumes
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Profile pictures
+    match /profile-pictures/{userId}/{fileName} {
+      allow read: if true; // Public read for profile pictures
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Certificates
+    match /certificates/{userId}/{fileName} {
+      allow read: if true; // Public read for certificates
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Videos
+    match /videos/{userId}/{fileName} {
+      allow read: if true; // Public read for videos
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // General uploads
+    match /uploads/{userId}/{fileName} {
+      allow read: if true; // Public read
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Default deny all other paths
+    match /{allPaths=**} {
+      allow read, write: if false;
     }
   }
 }

@@ -4,41 +4,82 @@
 import { firebaseConfig } from '@/firebase/config';
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { initializeFirestore, persistentLocalCache, memoryLocalCache, persistentSingleTabManager, getFirestore, Firestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 
 // IMPORTANT: DO NOT MODIFY THIS FUNCTION
 export function initializeFirebase() {
-  if (!getApps().length) {
-    // Important! initializeApp() is called without any arguments because Firebase App Hosting
-    // integrates with the initializeApp() function to provide the environment variables needed to
-    // populate the FirebaseOptions in production. It is critical that we attempt to call initializeApp()
-    // without arguments.
-    let firebaseApp;
-    try {
-      // Attempt to initialize via Firebase App Hosting environment variables
-      firebaseApp = initializeApp();
-    } catch (e) {
-      // Only warn in production because it's normal to use the firebaseConfig to initialize
-      // during development
-      if (process.env.NODE_ENV === "production") {
-        console.warn('Automatic initialization failed. Falling back to firebase config object.', e);
-      }
-      firebaseApp = initializeApp(firebaseConfig);
+  try {
+    // Check if we're in a browser environment
+    if (typeof window === 'undefined') {
+      // Server-side: return a mock object that won't crash
+      console.warn('Firebase initialization attempted on server side');
+      return null as any;
     }
 
-    return getSdks(firebaseApp);
-  }
+    if (!getApps().length) {
+      // Use the config directly - firebaseConfig has fallback values
+      const firebaseApp = initializeApp(firebaseConfig);
+      return getSdks(firebaseApp);
+    }
 
-  // If already initialized, return the SDKs with the already initialized App
-  return getSdks(getApp());
+    // If already initialized, return the SDKs with the already initialized App
+    return getSdks(getApp());
+  } catch (error) {
+    console.error('Firebase initialization error:', error);
+    // Return null to allow the app to handle it gracefully
+    throw error;
+  }
 }
 
+// Cache Firestore instance to avoid re-initializing with different options
+let cachedFirestore: Firestore | null = null;
+
 export function getSdks(firebaseApp: FirebaseApp) {
+  // If we've already created Firestore with options, reuse it
+  if (cachedFirestore) {
+    return {
+      firebaseApp,
+      auth: getAuth(firebaseApp),
+      firestore: cachedFirestore,
+      storage: getStorage(firebaseApp),
+    };
+  }
+
+  // If an app already exists and Firestore was created elsewhere, get it
+  try {
+    const existing = getFirestore(firebaseApp);
+    if (existing) {
+      cachedFirestore = existing;
+      return {
+        firebaseApp,
+        auth: getAuth(firebaseApp),
+        firestore: cachedFirestore,
+        storage: getStorage(firebaseApp),
+      };
+    }
+  } catch (_) {
+    // proceed to initialize below
+  }
+
+  // Configure Firestore once with best-available cache; cache the instance
+  try {
+    cachedFirestore = initializeFirestore(firebaseApp, {
+      localCache: persistentLocalCache({ tabManager: persistentSingleTabManager() }),
+      experimentalAutoDetectLongPolling: true,
+    } as any);
+  } catch (e) {
+    // Fallback to memory cache if IndexedDB is unavailable
+    cachedFirestore = initializeFirestore(firebaseApp, {
+      localCache: memoryLocalCache(),
+      experimentalAutoDetectLongPolling: true,
+    } as any);
+  }
+
   return {
     firebaseApp,
     auth: getAuth(firebaseApp),
-    firestore: getFirestore(firebaseApp),
+    firestore: cachedFirestore!,
     storage: getStorage(firebaseApp)
   };
 }

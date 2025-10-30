@@ -42,22 +42,20 @@ function ChatbotSkeleton() {
 
 export default function ChatbotPage() {
     return (
-        <div className="flex flex-col min-h-screen">
+        <div className="flex flex-col min-h-screen bg-gray-50">
             <SiteHeader />
-            <main className="flex-1">
-                 <section className="bg-muted/30">
-                    <div className="container text-center py-20">
-                        <h1 className="font-headline text-4xl font-bold tracking-tight sm:text-5xl">
-                            AI Chat Assistant
+            <main className="flex-1 py-8">
+                <div className="container mx-auto px-4">
+                    <div className="text-center mb-8">
+                        <h1 className="font-headline text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">
+                            AI Career Assistant
                         </h1>
-                        <p className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
-                           Get instant answers to your career questions with our multilingual AI-powered chatbot.
+                        <p className="mt-2 text-lg text-gray-600 max-w-2xl mx-auto">
+                           Get instant answers to your career questions with our AI-powered chatbot.
                         </p>
                     </div>
-                </section>
-                <section className="py-12">
-                   <ChatbotInterface />
-                </section>
+                    <ChatbotInterface />
+                </div>
             </main>
             <SiteFooter />
         </div>

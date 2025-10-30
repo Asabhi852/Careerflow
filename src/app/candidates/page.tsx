@@ -1,40 +1,55 @@
 'use client';
 
 // @ts-ignore - React hooks import issue
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 // @ts-ignore - Firebase Firestore import issue
-import { collection, query, limit } from 'firebase/firestore';
-import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
+import { collection, query, limit, where } from 'firebase/firestore';
+import { useFirestore, useCollection, useMemoFirebase, useUser } from '@/firebase';
 import { SiteHeader } from '@/components/layout/site-header';
 import { SiteFooter } from '@/components/layout/site-footer';
 import type { UserProfile } from '@/lib/types';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { UserAvatar } from '@/components/shared/user-avatar';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { CandidateSearch, type SearchFilters } from '@/components/candidates/candidate-search';
+import { useGeolocation } from '@/hooks/use-geolocation';
+import { sortByDistance, geocodeLocation, formatDistance } from '@/lib/geolocation';
+// @ts-ignore - Lucide icons import issue
+import { MapPin, Navigation } from 'lucide-react';
+import { toast } from '@/hooks/use-toast';
+import { LocationBanner } from '@/components/location/location-banner';
+import { LocationIndicator } from '@/components/location/location-indicator';
 
 function CandidateCard({ profile }: { profile: UserProfile }) {
     return (
         <Card>
             <CardHeader className="flex-row items-center gap-4">
-                 <Avatar className="h-16 w-16">
-                    {profile.profilePictureUrl && <AvatarImage src={profile.profilePictureUrl} alt={profile.firstName} />}
-                    <AvatarFallback>{profile.firstName?.charAt(0)}{profile.lastName?.charAt(0)}</AvatarFallback>
-                </Avatar>
-                <div>
+                <UserAvatar user={profile} size="lg" />
+                <div className="flex-1">
                     <CardTitle className="font-headline text-2xl">{profile.firstName} {profile.lastName}</CardTitle>
-                    <CardDescription>{profile.location}</CardDescription>
+                    <CardDescription className="flex items-center gap-2">
+                        <MapPin className="h-3 w-3" />
+                        {profile.location}
+                    </CardDescription>
+                    {profile.distance !== undefined && (
+                        <CardDescription className="flex items-center gap-2 text-primary mt-1">
+                            <Navigation className="h-3 w-3" />
+                            {formatDistance(profile.distance)}
+                        </CardDescription>
+                    )}
                 </div>
             </CardHeader>
             <CardContent>
                 {profile.skills && profile.skills.length > 0 && (
                      <div className="flex flex-wrap gap-2 mb-4">
                         {profile.skills.slice(0, 4).map((skill) => (
+                            // @ts-ignore - Badge children prop
                             <Badge key={skill} variant="secondary">{skill}</Badge>
                         ))}
+                        {/* @ts-ignore - Badge children prop */}
                         {profile.skills.length > 4 && <Badge variant="outline">+{profile.skills.length - 4}</Badge>}
                     </div>
                 )}
@@ -70,25 +85,67 @@ function CandidateCardSkeleton() {
 
 export default function CandidatesPage() {
     const firestore = useFirestore();
+    const { user } = useUser();
     const [filters, setFilters] = useState<SearchFilters>({
         searchTerm: '',
         location: '',
         skills: [],
         interests: [],
     });
+    const [sortByLocation, setSortByLocation] = useState(false);
+    const [showLocationBanner, setShowLocationBanner] = useState(true);
+    const { coordinates, isLoading: isLoadingLocation, requestLocation, permissionDenied, locationString } = useGeolocation(true);
 
     const profilesQuery = useMemoFirebase(() => {
         if (!firestore) return null;
-        return query(collection(firestore, 'public_profiles'), limit(100));
+        // Query all public profiles - we'll filter by userType on client side
+        return query(
+            collection(firestore, 'public_profiles'),
+            limit(100)
+        );
     }, [firestore]);
 
     const { data: allProfiles, isLoading } = useCollection<UserProfile>(profilesQuery);
 
-    // Client-side filtering
+    // Auto-enable location sorting when coordinates are available
+    useEffect(() => {
+        if (coordinates && !sortByLocation) {
+            setSortByLocation(true);
+        }
+    }, [coordinates]);
+
+    // Geocode candidate locations when they load
+    useEffect(() => {
+        if (!sortByLocation || !allProfiles) return;
+        
+        const geocodeCandidates = async () => {
+            for (const profile of allProfiles) {
+                if (!profile.coordinates && profile.location) {
+                    const coords = await geocodeLocation(profile.location);
+                    if (coords) {
+                        profile.coordinates = coords;
+                    }
+                }
+            }
+        };
+        
+        geocodeCandidates();
+    }, [allProfiles, sortByLocation]);
+
+    // Client-side filtering and sorting
     const profiles = useMemo(() => {
         if (!allProfiles) return [];
         
-        return allProfiles.filter(profile => {
+        let filtered = allProfiles.filter(profile => {
+            // Exclude the current user's own profile from the candidates list
+            if (user && profile.id === user.uid) {
+                return false;
+            }
+            // Only show job seekers (or profiles without userType for backward compatibility)
+            if (profile.userType && profile.userType !== 'job_seeker') {
+                return false;
+            }
+            
             // Search term filter
             if (filters.searchTerm) {
                 const searchLower = filters.searchTerm.toLowerCase();
@@ -134,7 +191,36 @@ export default function CandidatesPage() {
 
             return true;
         });
-    }, [allProfiles, filters]);
+
+        // Apply location-based sorting if enabled
+        if (sortByLocation && coordinates) {
+            filtered = sortByDistance(
+                filtered,
+                coordinates,
+                (profile) => profile.coordinates || null
+            );
+        }
+
+        return filtered;
+    }, [allProfiles, filters, sortByLocation, coordinates, user]);
+
+    const handleLocationEnabled = () => {
+        setShowLocationBanner(false);
+        setSortByLocation(true);
+    };
+
+    const handleLocationDenied = () => {
+        setShowLocationBanner(false);
+        setSortByLocation(false);
+    };
+
+    const handleLocationChange = () => {
+        // Location will be updated automatically by the hook
+        toast({
+            title: 'Location Updated',
+            description: 'Candidates are being sorted by your new location.',
+        });
+    };
 
     return (
         <div className="flex flex-col min-h-screen">
@@ -146,7 +232,7 @@ export default function CandidatesPage() {
                             Find Top Talent
                         </h1>
                         <p className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
-                            Browse profiles, search by skill, and connect with the best candidates for your team.
+                            Browse job-seeker profiles, search by skill, and connect with the best candidates for your team.
                         </p>
                     </div>
                 </section>
@@ -155,6 +241,20 @@ export default function CandidatesPage() {
                         <div className="mb-8">
                             <CandidateSearch onSearch={setFilters} />
                         </div>
+                        {/* Location Indicator */}
+                        {sortByLocation && coordinates && (
+                            <div className="flex justify-between items-center mb-6 p-4 bg-muted/50 rounded-lg">
+                                <div className="flex items-center gap-2">
+                                    <Navigation className="h-5 w-5 text-primary" />
+                                    <div>
+                                        <p className="text-sm font-medium">Showing candidates near you</p>
+                                        <p className="text-xs text-muted-foreground">{locationString}</p>
+                                    </div>
+                                </div>
+                                <LocationIndicator onLocationChange={handleLocationChange} />
+                            </div>
+                        )}
+                        
                         <div className="mb-4">
                             <p className="text-muted-foreground">
                                 {isLoading ? 'Loading...' : `Found ${profiles?.length || 0} candidates`}
@@ -168,14 +268,22 @@ export default function CandidatesPage() {
                         </div>
                         {profiles && profiles.length === 0 && !isLoading && (
                             <div className="text-center py-20 border-2 border-dashed rounded-lg">
-                                <h3 className="text-xl font-semibold">No candidates found.</h3>
-                                <p className="text-muted-foreground mt-2">As users sign up, their profiles will appear here.</p>
+                                <h3 className="text-xl font-semibold">No job-seekers found.</h3>
+                                <p className="text-muted-foreground mt-2">As job-seekers sign up, their profiles will appear here.</p>
                             </div>
                         )}
                     </div>
                 </section>
             </main>
             <SiteFooter />
+            
+            {/* Location Permission Banner */}
+            {showLocationBanner && !coordinates && !permissionDenied && (
+                <LocationBanner
+                    onLocationEnabled={handleLocationEnabled}
+                    onLocationDenied={handleLocationDenied}
+                />
+            )}
         </div>
     );
 }

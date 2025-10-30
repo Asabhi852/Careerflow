@@ -1,9 +1,9 @@
 'use client';
 
 // @ts-ignore - React hooks import issue
-import { use, useMemo } from 'react';
+import { use, useMemo, useEffect } from 'react';
 import { doc } from 'firebase/firestore';
-import { useFirestore, useDoc, useMemoFirebase } from '@/firebase';
+import { useFirestore, useDoc, useMemoFirebase, useUser } from '@/firebase';
 import { SiteHeader } from '@/components/layout/site-header';
 import { SiteFooter } from '@/components/layout/site-footer';
 import { Button } from '@/components/ui/button';
@@ -14,11 +14,12 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 // @ts-ignore - Lucide icons import issue
 import { ArrowLeft, Briefcase, MapPin, Mail, GraduationCap, Lightbulb, FileText, Video, Phone, Globe, Award, DollarSign, Calendar } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { UserAvatar } from '@/components/shared/user-avatar';
 
 export default function CandidateProfilePage({ params }: { params: { id: string } | Promise<{ id: string }> }) {
   const resolvedParams = use(params);
   const firestore = useFirestore();
+  const { user } = useUser();
 
   const profileRef = useMemoFirebase(() => {
     if (!firestore || !resolvedParams.id) return null;
@@ -26,6 +27,41 @@ export default function CandidateProfilePage({ params }: { params: { id: string 
   }, [firestore, resolvedParams.id]);
 
   const { data: profile, isLoading } = useDoc<UserProfile>(profileRef);
+
+  // Notify profile owner when someone views their profile
+  useEffect(() => {
+    const notifyProfileOwner = async () => {
+      if (!firestore || !user || !profile || !resolvedParams.id) return;
+      
+      // Don't notify if viewing own profile
+      if (user.uid === resolvedParams.id) return;
+
+      try {
+        // Import notification functions dynamically
+        const { notifyProfileView } = await import('@/lib/notifications');
+        const { doc: docRef, getDoc } = await import('firebase/firestore');
+        
+        // Get viewer profile for notification
+        const viewerProfileRef = docRef(firestore, 'users', user.uid);
+        const viewerProfileSnap = await getDoc(viewerProfileRef);
+        const viewerProfile = viewerProfileSnap.data();
+        const viewerName = viewerProfile?.firstName && viewerProfile?.lastName 
+          ? `${viewerProfile.firstName} ${viewerProfile.lastName}`
+          : user.displayName || undefined;
+
+        // Send notification to profile owner
+        await notifyProfileView(firestore, resolvedParams.id, {
+          viewerId: user.uid,
+          viewerName: viewerName,
+        });
+      } catch (error) {
+        console.error('Error sending profile view notification:', error);
+        // Don't show error to user, just log it
+      }
+    };
+
+    notifyProfileOwner();
+  }, [firestore, user, profile, resolvedParams.id]);
 
   return (
     <div className="flex flex-col min-h-screen">
@@ -69,12 +105,9 @@ export default function CandidateProfilePage({ params }: { params: { id: string 
           {profile && (
             <Card>
               <CardHeader className="items-center text-center">
-                <Avatar className="h-24 w-24">
-                    {profile.profilePictureUrl && <AvatarImage src={profile.profilePictureUrl} alt={`${profile.firstName} ${profile.lastName}`} />}
-                    <AvatarFallback className="text-3xl">
-                        {profile.firstName?.charAt(0)}{profile.lastName?.charAt(0)}
-                    </AvatarFallback>
-                </Avatar>
+                <div className="mb-4">
+                  <UserAvatar user={profile} size="xl" className="ring-4 ring-primary/20" />
+                </div>
                 <div className="pt-4">
                     <CardTitle className="font-headline text-4xl">{profile.firstName} {profile.lastName}</CardTitle>
                     <CardDescription className="text-lg flex flex-wrap items-center justify-center gap-x-4 gap-y-2 pt-2">
@@ -98,15 +131,11 @@ export default function CandidateProfilePage({ params }: { params: { id: string 
                     </div>
                 )}
 
-                {profile.phoneNumber && (
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                        <Phone className="h-4 w-4" />
-                        <span>{profile.phoneNumber}</span>
-                    </div>
-                )}
+                {/* Phone number is kept private - not displayed publicly */}
 
                 {profile.availability && (
                     <div>
+                        {/* @ts-ignore - Badge children prop */}
                         <Badge variant={profile.availability === 'available' ? 'default' : 'secondary'}>
                             {profile.availability === 'available' ? 'Available for Work' : 
                              profile.availability === 'open_to_offers' ? 'Open to Offers' : 'Not Available'}
@@ -126,6 +155,7 @@ export default function CandidateProfilePage({ params }: { params: { id: string 
                         <h3 className="font-semibold text-xl mb-3 flex items-center gap-2"><Lightbulb /> Skills</h3>
                         <div className="flex flex-wrap gap-2">
                         {profile.skills.map((skill, index) => (
+                            // @ts-ignore - Badge children prop
                             <Badge key={index} variant="secondary">{skill}</Badge>
                         ))}
                         </div>
@@ -137,6 +167,7 @@ export default function CandidateProfilePage({ params }: { params: { id: string 
                         <h3 className="font-semibold text-xl mb-3 flex items-center gap-2"><Globe /> Languages</h3>
                         <div className="flex flex-wrap gap-2">
                         {profile.languages.map((lang, index) => (
+                            // @ts-ignore - Badge children prop
                             <Badge key={index} variant="outline">{lang}</Badge>
                         ))}
                         </div>
@@ -166,7 +197,58 @@ export default function CandidateProfilePage({ params }: { params: { id: string 
                     </div>
                 )}
 
-                {profile.education && profile.education.length > 0 && (
+                {profile.educationDetails && profile.educationDetails.length > 0 && (
+                    <div>
+                        <h3 className="font-semibold text-xl mb-3 flex items-center gap-2"><GraduationCap /> Education</h3>
+                        <div className="space-y-4">
+                            {profile.educationDetails.map((edu) => (
+                                <Card key={edu.id} className="border-l-4 border-l-blue-500">
+                                    <CardHeader>
+                                        <div className="flex items-start justify-between">
+                                            <div>
+                                                <CardTitle className="text-lg">{edu.level}</CardTitle>
+                                                <CardDescription className="text-base font-medium">{edu.institution}</CardDescription>
+                                            </div>
+                                            {edu.current && (
+                                                <Badge variant="default">Currently Pursuing</Badge>
+                                            )}
+                                        </div>
+                                    </CardHeader>
+                                    <CardContent className="space-y-2">
+                                        {(edu.level === 'SSC' || edu.level === 'PUC') && edu.board && (
+                                            <p className="text-sm"><span className="font-medium">Board:</span> {edu.board}</p>
+                                        )}
+                                        {edu.university && (
+                                            <p className="text-sm"><span className="font-medium">University:</span> {edu.university}</p>
+                                        )}
+                                        {edu.degree && (
+                                            <p className="text-sm"><span className="font-medium">Degree:</span> {edu.degree}</p>
+                                        )}
+                                        <p className="text-sm"><span className="font-medium">Field of Study:</span> {edu.field}</p>
+                                        <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                                            <div className="flex items-center gap-2">
+                                                <Calendar className="h-4 w-4" />
+                                                <span>{edu.startYear} - {edu.current ? 'Present' : edu.endYear || 'N/A'}</span>
+                                            </div>
+                                            {edu.grade && (
+                                                <span className="font-medium text-foreground">Grade: {edu.grade}</span>
+                                            )}
+                                        </div>
+                                        {edu.achievements && (
+                                            <div className="mt-2 pt-2 border-t">
+                                                <p className="text-sm font-medium mb-1">Achievements:</p>
+                                                <p className="text-sm text-muted-foreground">{edu.achievements}</p>
+                                            </div>
+                                        )}
+                                    </CardContent>
+                                </Card>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {/* Fallback to old education format if educationDetails is not available */}
+                {(!profile.educationDetails || profile.educationDetails.length === 0) && profile.education && profile.education.length > 0 && (
                     <div>
                         <h3 className="font-semibold text-xl mb-3 flex items-center gap-2"><GraduationCap /> Education</h3>
                         <ul className="list-disc list-inside text-muted-foreground space-y-1">
@@ -246,7 +328,12 @@ export default function CandidateProfilePage({ params }: { params: { id: string 
 
               </CardContent>
               <CardFooter>
-                <Button size="lg">Contact {profile.firstName}</Button>
+                <Button size="lg" asChild>
+                  <Link href={`/dashboard/messages?userId=${profile.id}&name=${encodeURIComponent(profile.firstName + ' ' + profile.lastName)}`}>
+                    <Mail className="mr-2" />
+                    Contact {profile.firstName}
+                  </Link>
+                </Button>
               </CardFooter>
             </Card>
           )}
