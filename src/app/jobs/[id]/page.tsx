@@ -13,7 +13,7 @@ import type { JobPosting, UserProfile } from '@/lib/types';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 // @ts-ignore - Lucide icons import issue
-import { ArrowLeft, Briefcase, MapPin, DollarSign, BrainCircuit, CheckCircle, Loader2, Bookmark, FolderKanban, Trash2 } from 'lucide-react';
+import { ArrowLeft, Briefcase, MapPin, DollarSign, BrainCircuit, CheckCircle, Loader2, Bookmark, FolderKanban, Trash2, ExternalLink, Pencil } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from '@/hooks/use-toast';
 import { errorEmitter } from '@/firebase/error-emitter';
@@ -23,8 +23,8 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { useRouter } from 'next/navigation';
 
 
-export default function JobDetailPage({ params }: { params: { id: string } | Promise<{ id: string }> }) {
-  const resolvedParams = use(params);
+export default function JobDetailPage({ params }: { params: Promise<{ id: string }> | { id: string } }) {
+  const resolvedParams = use(params as Promise<{ id: string }>);
   const firestore = useFirestore();
   const { user, isUserLoading } = useUser();
   const router = useRouter();
@@ -66,11 +66,13 @@ export default function JobDetailPage({ params }: { params: { id: string } | Pro
     
     setIsApplying(true);
 
+    const companyName = job.organizationName || job.company || 'Unknown Company';
+    
     const applicationData = {
       jobPostingId: job.id,
       applicantId: user.uid,
       jobTitle: job.title,
-      company: job.company,
+      company: companyName,
       applicationDate: serverTimestamp(),
       status: 'submitted',
     };
@@ -106,7 +108,7 @@ export default function JobDetailPage({ params }: { params: { id: string } | Pro
         applicationId: applicationDoc.id,
         jobId: job.id,
         jobTitle: job.title,
-        companyName: job.company,
+        companyName: companyName,
       });
 
       // Notify the job poster (new application notification)
@@ -231,7 +233,12 @@ export default function JobDetailPage({ params }: { params: { id: string } | Pro
               <CardHeader>
                 <CardTitle className="font-headline text-4xl">{job.title}</CardTitle>
                 <CardDescription className="text-lg flex flex-wrap items-center gap-x-4 gap-y-2 pt-2">
-                  <span className="flex items-center gap-2"><Briefcase /> {job.company}</span>
+                  <span className="flex items-center gap-2">
+                    <Briefcase /> {job.organizationName || job.company}
+                    {job.organizationType && (
+                      <span className="text-xs text-muted-foreground capitalize">({job.organizationType})</span>
+                    )}
+                  </span>
                   <span className="flex items-center gap-2"><MapPin /> {job.location}</span>
                   {job.salary && <span className="flex items-center gap-2"><DollarSign /> {job.salary.toLocaleString()}</span>}
                   {job.category && <span className="flex items-center gap-2 capitalize"><FolderKanban /> {job.category}</span>}
@@ -257,16 +264,25 @@ export default function JobDetailPage({ params }: { params: { id: string } | Pro
 
               </CardContent>
               <CardFooter className="flex items-center gap-4">
-                <Button size="lg" onClick={handleApply} disabled={!user || isApplying || isUserLoading}>
-                  {isApplying ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Applying...
-                    </>
-                  ) : (
-                    'Apply Now'
-                  )}
-                </Button>
+                {job.applicationUrl ? (
+                  <Button size="lg" asChild>
+                    <a href={job.applicationUrl} target="_blank" rel="noopener noreferrer" className="flex items-center">
+                      Apply on Website
+                      <ExternalLink className="ml-2 h-4 w-4" />
+                    </a>
+                  </Button>
+                ) : (
+                  <Button size="lg" onClick={handleApply} disabled={!user || isApplying || isUserLoading}>
+                    {isApplying ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Applying...
+                      </>
+                    ) : (
+                      'Apply Now'
+                    )}
+                  </Button>
+                )}
                 {user && (
                   <Button size="lg" variant="outline" onClick={handleSaveToggle}>
                      <Bookmark className={cn("mr-2", isSaved && "fill-current")} />
@@ -274,12 +290,18 @@ export default function JobDetailPage({ params }: { params: { id: string } | Pro
                   </Button>
                 )}
                  {isOwner && (
-                    <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                            <Button size="lg" variant="destructive">
-                                <Trash2 className="mr-2" /> Delete
-                            </Button>
-                        </AlertDialogTrigger>
+                    <>
+                      <Button size="lg" variant="outline" asChild>
+                        <Link href={`/dashboard/edit-job/${resolvedParams.id}`}>
+                          <Pencil className="mr-2 h-4 w-4" /> Edit
+                        </Link>
+                      </Button>
+                      <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                              <Button size="lg" variant="destructive">
+                                  <Trash2 className="mr-2" /> Delete
+                              </Button>
+                          </AlertDialogTrigger>
                         <AlertDialogContent>
                             {/* @ts-ignore - AlertDialog children prop */}
                             <AlertDialogHeader>
@@ -298,6 +320,7 @@ export default function JobDetailPage({ params }: { params: { id: string } | Pro
                             </AlertDialogFooter>
                         </AlertDialogContent>
                     </AlertDialog>
+                    </>
                  )}
               </CardFooter>
             </Card>

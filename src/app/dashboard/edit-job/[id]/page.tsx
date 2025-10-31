@@ -17,10 +17,14 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from '@/hooks/use-toast';
-import { Loader2 } from 'lucide-react';
-import { useUser, useFirestore, addDocumentNonBlocking } from '@/firebase';
-import { collection } from 'firebase/firestore';
+import { Loader2, ArrowLeft } from 'lucide-react';
+import { useUser, useFirestore, useMemoFirebase, useDoc } from '@/firebase';
+import { doc, updateDoc } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
+import { use, useEffect } from 'react';
+import type { JobPosting } from '@/lib/types';
+import Link from 'next/link';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const jobFormSchema = (z as any).object({
   title: (z as any).string().min(3, { message: 'Job title must be at least 3 characters.' }),
@@ -55,10 +59,18 @@ const jobFormSchema = (z as any).object({
   benefits: (z as any).string().optional(),
 });
 
-export default function PostJobPage() {
+export default function EditJobPage({ params }: { params: Promise<{ id: string }> | { id: string } }) {
+  const resolvedParams = use(params as Promise<{ id: string }>);
   const { user } = useUser();
   const firestore = useFirestore();
   const router = useRouter();
+
+  const jobRef = useMemoFirebase(() => {
+    if (!firestore || !resolvedParams.id) return null;
+    return doc(firestore, 'jobs', resolvedParams.id);
+  }, [firestore, resolvedParams.id]);
+
+  const { data: job, isLoading } = useDoc<JobPosting>(jobRef);
 
   const form = useForm<any>({
     resolver: zodResolver(jobFormSchema),
@@ -90,15 +102,68 @@ export default function PostJobPage() {
 
   const organizationType = form.watch('organizationType');
 
+  // Populate form when job data loads
+  useEffect(() => {
+    if (job) {
+      const skillsString = Array.isArray(job.skills) ? job.skills.join(', ') : '';
+      const benefitsString = Array.isArray(job.benefits) ? job.benefits.join('\n') : '';
+      
+      form.reset({
+        title: job.title || '',
+        organizationType: job.organizationType || '',
+        organizationName: job.organizationName || job.company || '',
+        organizationWebsite: job.organizationWebsite || '',
+        organizationEmail: job.organizationEmail || '',
+        organizationPhone: job.organizationPhone || '',
+        organizationAddress: job.organizationAddress || '',
+        organizationDescription: job.organizationDescription || '',
+        industry: job.industry || '',
+        organizationSize: job.organizationSize || '',
+        foundedYear: job.foundedYear || undefined,
+        accreditation: job.accreditation || '',
+        programsOffered: job.programsOffered || '',
+        location: job.location || '',
+        description: job.description || '',
+        salary: job.salary || undefined,
+        applicationUrl: job.applicationUrl || '',
+        skills: skillsString,
+        category: job.category || '',
+        employmentType: job.employmentType || 'full-time',
+        experienceLevel: job.experienceLevel || 'mid',
+        benefits: benefitsString,
+      });
+    }
+  }, [job, form]);
+
+  // Check if user is the job owner
+  if (!isLoading && job && user && job.posterId !== user.uid) {
+    console.log('User is not the owner, redirecting...', {
+      userId: user.uid,
+      posterId: job.posterId
+    });
+    router.push(`/jobs/${resolvedParams.id}`);
+    return null;
+  }
+
+  console.log('Edit page loaded', {
+    isLoading,
+    hasJob: !!job,
+    hasUser: !!user,
+    isOwner: job && user && job.posterId === user.uid
+  });
+
   async function onSubmit(data: any) {
-    if (!user || !firestore) {
+    if (!user || !firestore || !jobRef) {
+      console.error('Missing required data:', { user: !!user, firestore: !!firestore, jobRef: !!jobRef });
       toast({
         variant: 'destructive',
         title: 'Error',
-        description: 'You must be logged in to post a job.',
+        description: 'You must be logged in to edit a job.',
       });
       return;
     }
+
+    console.log('Submitting job update...', data);
 
     try {
       const skillsArray = data.skills?.split(',').map((s: string) => s.trim()).filter(Boolean) || [];
@@ -108,45 +173,83 @@ export default function PostJobPage() {
         ...data,
         skills: skillsArray,
         benefits: benefitsArray,
-        posterId: user.uid,
-        postedAt: new Date().toISOString(),
-        status: 'active',
-        // Add company field for backward compatibility
         company: data.organizationName || data.company || 'Unknown Company',
+        updatedAt: new Date().toISOString(),
       };
 
-      // Remove undefined and empty string values to avoid Firestore errors
+      // Remove undefined and empty string values
       const cleanJobData = Object.fromEntries(
         Object.entries(jobData).filter(([_, value]) => value !== undefined && value !== '')
       );
 
-      const jobsRef = collection(firestore, 'jobs');
-      await addDocumentNonBlocking(jobsRef, cleanJobData);
+      console.log('Updating job with data:', cleanJobData);
+      
+      await updateDoc(jobRef, cleanJobData);
 
+      console.log('Job updated successfully');
+      
       toast({
-        title: 'Job Posted',
-        description: 'Your job posting has been published successfully.',
+        title: 'Job Updated',
+        description: 'Your job posting has been updated successfully.',
       });
 
-      router.push('/dashboard/jobs');
+      router.push(`/jobs/${resolvedParams.id}`);
     } catch (error: any) {
+      console.error('Error updating job:', error);
       toast({
         variant: 'destructive',
         title: 'Error',
-        description: error.message || 'Could not post job.',
+        description: error.message || 'Could not update job.',
       });
     }
   }
 
+  if (isLoading) {
+    return (
+      <div className="grid gap-6">
+        <Skeleton className="h-12 w-3/4" />
+        <Card>
+          <CardHeader>
+            <Skeleton className="h-6 w-1/2" />
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-32 w-full" />
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (!job) {
+    return (
+      <div className="text-center py-20">
+        <h3 className="text-2xl font-semibold">Job not found</h3>
+        <p className="text-muted-foreground mt-2">This job posting may have been removed.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="grid gap-6">
+      <div className="flex items-center gap-4">
+        <Button variant="ghost" asChild>
+          <Link href={`/jobs/${resolvedParams.id}`}>
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back to Job
+          </Link>
+        </Button>
+      </div>
+      
       <div>
-        <h1 className="font-headline text-3xl font-bold tracking-tight">Post a Job</h1>
+        <h1 className="font-headline text-3xl font-bold tracking-tight">Edit Job</h1>
         <p className="text-muted-foreground mt-2">
-          Create a new job posting to find the perfect candidate
+          Update the job posting details
         </p>
       </div>
 
+      {/* Rest of the form - same structure as post-job page */}
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
           
@@ -154,7 +257,7 @@ export default function PostJobPage() {
           <Card>
             <CardHeader>
               <CardTitle>Organization Information</CardTitle>
-              <CardDescription>Provide details about your organization</CardDescription>
+              <CardDescription>Update details about your organization</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <FormField
@@ -388,7 +491,7 @@ export default function PostJobPage() {
           <Card>
             <CardHeader>
               <CardTitle>Job Details</CardTitle>
-              <CardDescription>Fill in the information about the position</CardDescription>
+              <CardDescription>Update the position information</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -594,7 +697,7 @@ export default function PostJobPage() {
               {form.formState.isSubmitting && (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               )}
-              Post Job
+              Update Job
             </Button>
             <Button
               type="button"

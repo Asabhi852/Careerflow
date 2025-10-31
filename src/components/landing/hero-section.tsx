@@ -38,9 +38,15 @@ const floatingElements = [
 
 export function HeroSection() {
   const [currentTitleIndex, setCurrentTitleIndex] = useState(0);
-  const [displayedText, setDisplayedText] = useState('');
+  const [displayedText, setDisplayedText] = useState(jobTitles[0]); // Start with first full title to avoid hydration mismatch
   const [isDeleting, setIsDeleting] = useState(false);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
+  const [isMounted, setIsMounted] = useState(false);
+
+  // Set mounted state
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   // Mouse tracking for parallax effect
   useEffect(() => {
@@ -55,8 +61,10 @@ export function HeroSection() {
     return () => window.removeEventListener('mousemove', handleMouseMove);
   }, []);
 
-  // Typing animation effect
+  // Typing animation effect - only starts after mount
   useEffect(() => {
+    if (!isMounted) return; // Only animate after component mounts
+    
     const currentTitle = jobTitles[currentTitleIndex];
     const typingSpeed = isDeleting ? 50 : 100;
 
@@ -78,7 +86,7 @@ export function HeroSection() {
     }, typingSpeed);
 
     return () => clearTimeout(timer);
-  }, [displayedText, isDeleting, currentTitleIndex]);
+  }, [displayedText, isDeleting, currentTitleIndex, isMounted]);
 
   return (
     <section className="relative overflow-hidden bg-gradient-to-b from-primary/5 via-background to-background">

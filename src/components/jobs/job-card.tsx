@@ -183,7 +183,12 @@ export function JobCard({ job, onDeleted }: { job: JobPosting; onDeleted?: () =>
         </div>
         <CardDescription className="flex flex-col gap-2 pt-2">
             <div className="flex items-center justify-between">
-              <span className="flex items-center gap-2"><Briefcase /> {job.company}</span>
+              <span className="flex items-center gap-2">
+                <Briefcase /> {job.organizationName || job.company}
+                {job.organizationType && (
+                  <span className="text-xs text-muted-foreground capitalize">({job.organizationType})</span>
+                )}
+              </span>
               {job.source && job.source !== 'internal' && (
                 // @ts-ignore - Badge children prop
                 <Badge variant="outline" className="text-xs capitalize">{job.source}</Badge>
@@ -215,12 +220,24 @@ export function JobCard({ job, onDeleted }: { job: JobPosting; onDeleted?: () =>
             {job.skills.length > 3 && <Badge variant="outline">+{job.skills.length - 3}</Badge>}
             </div>
         )}
-        {isExternalJob && job.externalUrl ? (
+{isExternalJob && job.externalUrl ? (
           <Button asChild className="w-full">
             <a href={job.externalUrl} target="_blank" rel="noopener noreferrer">
               View on {job.source === 'linkedin' ? 'LinkedIn' : job.source === 'naukri' ? 'Naukri.com' : 'External Site'}
             </a>
           </Button>
+        ) : job.applicationUrl ? (
+          <div className="flex gap-2 w-full">
+            <Button asChild className="flex-1" variant="outline">
+              <Link href={`/jobs/${job.id}`}>View Details</Link>
+            </Button>
+            <Button asChild className="flex-1">
+              <a href={job.applicationUrl} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center">
+                Apply
+                <ExternalLink className="ml-1 h-4 w-4" />
+              </a>
+            </Button>
+          </div>
         ) : (
           <Button asChild className="w-full">
             <Link href={`/jobs/${job.id}`}>View Details</Link>

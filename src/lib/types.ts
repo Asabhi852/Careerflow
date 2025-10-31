@@ -10,7 +10,25 @@ export type JobPosting = {
   id: string;
   title: string;
   description: string;
-  company: string;
+  company: string; // Kept for backward compatibility
+  
+  // Organization Details
+  organizationType?: 'company' | 'startup' | 'school' | 'college' | 'nonprofit' | 'government' | 'healthcare' | 'other';
+  organizationName?: string;
+  organizationDescription?: string;
+  organizationWebsite?: string;
+  organizationEmail?: string;
+  organizationPhone?: string;
+  organizationAddress?: string;
+  industry?: string;
+  organizationSize?: '1-10' | '11-50' | '51-200' | '201-500' | '501-1000' | '1000+';
+  foundedYear?: number;
+  
+  // For Schools/Colleges
+  accreditation?: string;
+  programsOffered?: string;
+  
+  // Job Details
   location: string;
   coordinates?: Coordinates; // Geographic coordinates for location-based search
   salary?: number;
@@ -19,10 +37,15 @@ export type JobPosting = {
   category?: string;
   source?: 'internal' | 'linkedin' | 'naukri' | 'external';
   externalUrl?: string;
+  applicationUrl?: string; // Direct URL to apply on company website
   postedDate?: string;
+  postedAt?: string;
   employmentType?: string;
+  experienceLevel?: string;
+  benefits?: string[];
   companyLogo?: string;
   distance?: number; // Calculated distance from user (in km)
+  status?: 'active' | 'closed' | 'draft';
 };
 
 export type UserProfile = {
@@ -113,6 +136,8 @@ export type Message = {
     receiverId: string;
     content: string;
     timestamp: Timestamp | any; // Allow for serverTimestamp
+    status?: 'sending' | 'sent' | 'delivered' | 'read'; // Message delivery status
+    read?: boolean; // Whether the message has been read
 };
 
 export type Conversation = {

@@ -10,6 +10,8 @@ import { X, MessageCircle, Send, Bot, User as UserIcon, Minimize2 } from 'lucide
 import { cn } from '@/lib/utils';
 import { multilingualQueryResolution } from '@/ai/flows/multilingual-query-resolution';
 import { useUser } from '@/firebase';
+import { LanguageSelector } from './language-selector';
+import { useI18n } from '@/i18n/I18nProvider';
 
 interface Message {
   sender: 'user' | 'bot';
@@ -19,7 +21,7 @@ interface Message {
 
 export function FloatingChatbot() {
   const { user } = useUser();
-  const { language } = require('../../i18n/I18nProvider').useI18n();
+  const { language, t } = useI18n();
   const [isOpen, setIsOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -32,21 +34,19 @@ export function FloatingChatbot() {
 
   useEffect(() => {
     setIsMounted(true);
+  }, []);
+
+  // Update welcome message when language changes
+  useEffect(() => {
+    if (!isMounted) return;
     
-    // Set initial welcome message
-    const welcomes: Record<string, string> = {
-      en: "👋 Hi! I'm your AI career assistant. How can I help you today?",
-      hi: '👋 नमस्ते! मैं आपका एआई करियर असिस्टेंट हूँ। आज मैं आपकी कैसे मदद कर सकता हूँ?',
-      te: '👋 హలో! నేను మీ AI కెరీర్ సహాయకుడు. ఈరోజు నేను మీకు ఎలా సహాయం చేయగలను?',
-      ta: '👋 வணக்கம்! நான் உங்கள் AI தொழில் உதவியாளர். இன்று உங்களுக்கு எப்படி உதவலாம்?',
-    };
     const welcomeMessage: Message = {
       sender: 'bot',
-      text: welcomes[language] || welcomes.en,
+      text: t('chatbot_welcome'),
       timestamp: new Date()
     };
     setMessages([welcomeMessage]);
-  }, []);
+  }, [language, isMounted, t]);
 
   // Auto-scroll to bottom
   const scrollToBottom = () => {
@@ -192,11 +192,12 @@ export function FloatingChatbot() {
                   <div>
                     <div className="font-semibold">AI Career Assistant</div>
                     <div className="text-xs text-blue-100 font-normal">
-                      {isLoading ? 'Typing...' : 'Online now'}
+                      {isLoading ? t('chatbot_typing', 'Typing...') : t('chatbot_online', 'Online now')}
                     </div>
                   </div>
                 </CardTitle>
                 <div className="flex items-center gap-1">
+                  <LanguageSelector />
                   <Button
                     variant="ghost"
                     size="sm"
@@ -284,7 +285,7 @@ export function FloatingChatbot() {
                           </Avatar>
                           <div className="bg-white border border-gray-200 rounded-2xl rounded-bl-sm px-3 py-2 shadow-sm">
                             <div className="flex items-center gap-1">
-                              <span className="text-sm text-gray-600">Typing</span>
+                              <span className="text-sm text-gray-600">{t('chatbot_typing', 'Typing')}</span>
                               <div className="flex gap-1">
                                 <div className="w-1.5 h-1.5 bg-blue-600 rounded-full animate-bounce"></div>
                                 <div className="w-1.5 h-1.5 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
@@ -324,7 +325,7 @@ export function FloatingChatbot() {
                       value={input}
                       onChange={(e) => setInput(e.target.value)}
                       onKeyPress={handleKeyPress}
-                      placeholder="Type your message..."
+                      placeholder={t('chatbot_placeholder', 'Type your message...')}
                       disabled={isLoading}
                       className="flex-1 rounded-full bg-gray-50 dark:bg-gray-900/60 border-gray-300 dark:border-gray-700 focus:ring-2 focus:ring-blue-500 text-sm shadow-sm placeholder:text-gray-500 dark:placeholder:text-gray-400"
                     />

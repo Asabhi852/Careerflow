@@ -41,9 +41,18 @@ const stats: Stat[] = [
 ];
 
 function AnimatedCounter({ target, suffix = '', prefix = '' }: { target: number; suffix?: string; prefix?: string }) {
-  const [count, setCount] = useState(0);
+  const [count, setCount] = useState(target); // Start with target value to avoid hydration mismatch
+  const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!isMounted) return; // Only animate after component mounts on client
+
+    setCount(0); // Reset to 0 before animation
+    
     const duration = 2000; // 2 seconds
     const steps = 60;
     const increment = target / steps;
@@ -60,7 +69,7 @@ function AnimatedCounter({ target, suffix = '', prefix = '' }: { target: number;
     }, duration / steps);
 
     return () => clearInterval(timer);
-  }, [target]);
+  }, [target, isMounted]);
 
   return (
     <span className="text-4xl sm:text-5xl font-bold text-primary">

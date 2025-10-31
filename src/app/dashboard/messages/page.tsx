@@ -6,8 +6,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
 // @ts-ignore - Lucide icons import issue
-import { Send, User, MessageSquare } from 'lucide-react';
+import { Send, MessageSquare, Check, CheckCheck, Clock } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useUser, useFirestore, useCollection, useMemoFirebase, addDocumentNonBlocking, setDocumentNonBlocking, useDoc } from '@/firebase';
 // @ts-ignore - Firebase Firestore import issue
@@ -27,6 +28,8 @@ function MessagesPageContent() {
     const [selectedConversation, setSelectedConversation] = useState<UserProfile | null>(null);
     const [input, setInput] = useState('');
     const [isSending, setIsSending] = useState(false);
+    const [isTyping, setIsTyping] = useState(false);
+    const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
     // Use the new conversations hook
     const { conversations } = useConversations();
@@ -79,6 +82,10 @@ function MessagesPageContent() {
         if (!input.trim() || !user || !firestore || !selectedConversation) return;
 
         setIsSending(true);
+        setIsTyping(false);
+        if (typingTimeoutRef.current) {
+            clearTimeout(typingTimeoutRef.current);
+        }
 
         const timestamp = serverTimestamp();
         // @ts-ignore - Firebase doc function
@@ -89,6 +96,8 @@ function MessagesPageContent() {
             receiverId: selectedConversation.id,
             content: input.trim(),
             timestamp,
+            status: 'sent',
+            read: false,
         };
 
         // @ts-ignore - Firebase doc function
@@ -137,25 +146,167 @@ function MessagesPageContent() {
                     <div className="col-span-2 flex flex-col">
                         {selectedConversation ? (
                             <>
-                                <CardHeader className="border-b">
-                                    <CardTitle>{selectedConversation.firstName} {selectedConversation.lastName}</CardTitle>
+                                <CardHeader className="border-b bg-muted/30">
+                                    <div className="flex items-center gap-3">
+                                        <Avatar className="h-10 w-10">
+                                            <AvatarImage src={selectedConversation.profilePictureUrl} />
+                                            <AvatarFallback>
+                                                {selectedConversation.firstName?.[0]}{selectedConversation.lastName?.[0]}
+                                            </AvatarFallback>
+                                        </Avatar>
+                                        <div className="flex flex-col">
+                                            <CardTitle className="text-base">
+                                                {selectedConversation.firstName} {selectedConversation.lastName}
+                                            </CardTitle>
+                                            <p className="text-xs text-muted-foreground">
+                                                {isTyping ? 'typing...' : 'Online'}
+                                            </p>
+                                        </div>
+                                    </div>
                                 </CardHeader>
                                 <ScrollArea className="flex-1 p-6" viewportRef={scrollAreaViewport}>
                                     <div className="space-y-4">
                                         {isLoadingMessages && <div className="text-center p-8"><p className="text-muted-foreground">Loading messages...</p></div>}
-                                        {filteredMessages.map((msg, index) => (
-                                            <div key={index} className={`flex items-end gap-2 ${msg.senderId === user?.uid ? 'justify-end' : ''}`}>
-                                                {msg.senderId !== user?.uid && <Avatar className="h-8 w-8"><AvatarImage src={selectedConversation.profilePictureUrl} /></Avatar>}
-                                                <div className={`max-w-xs p-3 rounded-lg ${msg.senderId === user?.uid ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}>
-                                                    <p>{msg.content}</p>
-                                                </div>
+                                        {!isLoadingMessages && filteredMessages.length === 0 && (
+                                            <div className="text-center p-8">
+                                                <p className="text-muted-foreground">No messages yet. Start a conversation!</p>
                                             </div>
-                                        ))}
+                                        )}
+                                        {filteredMessages.map((msg, index) => {
+                                            const isSender = msg.senderId === user?.uid;
+                                            const timestamp = msg.timestamp?.toDate?.() || msg.timestamp;
+                                            
+                                            // Format time like WhatsApp
+                                            const now = new Date();
+                                            const isToday = timestamp instanceof Date && timestamp.toDateString() === now.toDateString();
+                                            const isYesterday = timestamp instanceof Date && 
+                                                new Date(timestamp.getTime() + 86400000).toDateString() === now.toDateString();
+                                            
+                                            const timeString = timestamp instanceof Date 
+                                                ? timestamp.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+                                                : '';
+                                            
+                                            let dateString = '';
+                                            if (timestamp instanceof Date) {
+                                                if (isToday) {
+                                                    dateString = 'Today';
+                                                } else if (isYesterday) {
+                                                    dateString = 'Yesterday';
+                                                } else {
+                                                    dateString = timestamp.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                                                }
+                                            }
+                                            
+                                            // Show date separator if this is the first message of a new day
+                                            const showDateSeparator = index === 0 || (
+                                                filteredMessages[index - 1]?.timestamp?.toDate?.()?.toDateString() !== timestamp?.toDateString?.()
+                                            );
+                                            
+                                            // Check if we should group this message with the previous one
+                                            const prevMsg = filteredMessages[index - 1];
+                                            const shouldGroup = prevMsg && 
+                                                prevMsg.senderId === msg.senderId && 
+                                                !showDateSeparator &&
+                                                timestamp instanceof Date && 
+                                                prevMsg.timestamp?.toDate?.() &&
+                                                Math.abs(timestamp.getTime() - prevMsg.timestamp.toDate().getTime()) < 60000;
+
+                                            return (
+                                                <div key={msg.id || index}>
+                                                    {showDateSeparator && dateString && (
+                                                        <div className="flex items-center justify-center my-4">
+                                                            <Badge variant="secondary" className="px-3 py-1 text-xs font-normal">
+                                                                {dateString}
+                                                            </Badge>
+                                                        </div>
+                                                    )}
+                                                    <div className={`flex items-end gap-2 ${isSender ? 'justify-end' : 'justify-start'} ${shouldGroup ? 'mt-1' : 'mt-4'}`}>
+                                                        {!isSender && !shouldGroup && (
+                                                            <Avatar className="h-8 w-8 flex-shrink-0">
+                                                                <AvatarImage src={selectedConversation.profilePictureUrl} />
+                                                                <AvatarFallback>
+                                                                    {selectedConversation.firstName?.[0]}{selectedConversation.lastName?.[0]}
+                                                                </AvatarFallback>
+                                                            </Avatar>
+                                                        )}
+                                                        {!isSender && shouldGroup && <div className="w-8" />}
+                                                        <div className={`flex flex-col ${isSender ? 'items-end' : 'items-start'} max-w-[70%]`}>
+                                                            <div className={`group relative px-3 py-2 rounded-lg shadow-sm ${
+                                                                isSender 
+                                                                    ? 'bg-[#dcf8c6] text-gray-900' 
+                                                                    : 'bg-white border border-gray-200 text-gray-900'
+                                                            } ${!shouldGroup ? (isSender ? 'rounded-br-none' : 'rounded-bl-none') : ''}`}>
+                                                                <p className="break-words text-sm leading-relaxed">{msg.content}</p>
+                                                                <div className={`flex items-center gap-1 mt-1 ${isSender ? 'justify-end' : 'justify-start'}`}>
+                                                                    <span className="text-[10px] text-gray-500">
+                                                                        {timeString}
+                                                                    </span>
+                                                                    {isSender && (
+                                                                        <span className="text-blue-500">
+                                                                            {msg.read ? (
+                                                                                <CheckCheck className="h-3 w-3" />
+                                                                            ) : msg.status === 'delivered' ? (
+                                                                                <CheckCheck className="h-3 w-3 text-gray-400" />
+                                                                            ) : msg.status === 'sent' ? (
+                                                                                <Check className="h-3 w-3 text-gray-400" />
+                                                                            ) : (
+                                                                                <Clock className="h-3 w-3 text-gray-400" />
+                                                                            )}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        {isSender && !shouldGroup && (
+                                                            <Avatar className="h-8 w-8 flex-shrink-0">
+                                                                <AvatarImage src={user?.photoURL || undefined} />
+                                                                <AvatarFallback>
+                                                                    {user?.displayName?.[0] || user?.email?.[0]?.toUpperCase()}
+                                                                </AvatarFallback>
+                                                            </Avatar>
+                                                        )}
+                                                        {isSender && shouldGroup && <div className="w-8" />}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
                                     </div>
                                 </ScrollArea>
-                                <div className="p-4 border-t flex items-center gap-2">
-                                    <Input placeholder="Type a message..." value={input} onChange={(e) => setInput(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && !isSending && handleSendMessage()} disabled={isSending} />
-                                    <Button onClick={handleSendMessage} disabled={isSending || !input.trim()}><Send className="w-4 h-4" /></Button>
+                                <div className="p-4 border-t bg-muted/20">
+                                    <div className="flex items-center gap-2">
+                                        <Input 
+                                            placeholder="Type a message..." 
+                                            value={input} 
+                                            onChange={(e) => {
+                                                setInput(e.target.value);
+                                                if (e.target.value.length > 0 && !isTyping) {
+                                                    setIsTyping(true);
+                                                }
+                                                if (typingTimeoutRef.current) {
+                                                    clearTimeout(typingTimeoutRef.current);
+                                                }
+                                                typingTimeoutRef.current = setTimeout(() => {
+                                                    setIsTyping(false);
+                                                }, 1000);
+                                            }}
+                                            onKeyPress={(e) => {
+                                                if (e.key === 'Enter' && !e.shiftKey && !isSending) {
+                                                    e.preventDefault();
+                                                    handleSendMessage();
+                                                }
+                                            }}
+                                            disabled={isSending}
+                                            className="flex-1"
+                                        />
+                                        <Button 
+                                            onClick={handleSendMessage} 
+                                            disabled={isSending || !input.trim()}
+                                            size="icon"
+                                            className="flex-shrink-0"
+                                        >
+                                            <Send className="h-4 w-4" />
+                                        </Button>
+                                    </div>
                                 </div>
                             </>
                         ) : (
