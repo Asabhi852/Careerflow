@@ -83,7 +83,7 @@ export function useLocationState() {
       try {
         callback(coordinates);
       } catch (error) {
-        console.error('Error in location update callback:', error);
+        console.warn('[Location Update] Error in callback:', error);
       }
     });
   }, []);
@@ -104,11 +104,11 @@ export function useLocationState() {
         return null;
       }
     } catch (error) {
-      console.error('Error searching location:', error);
+      console.warn('[Location Search] Error searching location:', error);
       toast({
-        variant: 'destructive',
+        variant: 'default',
         title: 'Search Error',
-        description: 'There was a problem searching for that location.',
+        description: 'There was a problem searching for that location. Please try again.',
       });
       return null;
     } finally {
@@ -129,18 +129,18 @@ export function useLocationState() {
         return coordinates;
       } else {
         toast({
-          variant: 'destructive',
+          variant: 'default',
           title: 'Location Access Denied',
           description: 'Please enable location access or search for a location manually.',
         });
         return null;
       }
     } catch (error) {
-      console.error('Error getting current location:', error);
+      console.warn('[Location] Error getting current location:', error);
       toast({
-        variant: 'destructive',
+        variant: 'default',
         title: 'Location Error',
-        description: 'There was a problem getting your location.',
+        description: 'There was a problem getting your location. You can search for it manually.',
       });
       return null;
     } finally {
@@ -187,28 +187,39 @@ export function useLocationState() {
         updateLocation(coordinates);
       },
       (error) => {
-        console.error('Error watching position:', error);
+        // Handle location tracking errors gracefully
         setIsTracking(false);
         watchIdRef.current = null;
 
         let errorMessage = 'Error tracking location';
+        let shouldShowToast = true;
+        
         switch (error.code) {
           case error.PERMISSION_DENIED:
             errorMessage = 'Location tracking permission denied';
+            console.info('[Location Tracking] Permission denied. Location tracking is optional.');
+            shouldShowToast = false; // Don't show toast for user choice
             break;
           case error.POSITION_UNAVAILABLE:
             errorMessage = 'Location information unavailable';
+            console.warn('[Location Tracking] Position unavailable. GPS might be disabled.');
             break;
           case error.TIMEOUT:
             errorMessage = 'Location tracking timed out';
+            console.warn('[Location Tracking] Request timed out. Will retry automatically.');
             break;
+          default:
+            console.warn('[Location Tracking] Error:', error.message || 'Unknown error');
         }
 
-        toast({
-          variant: 'destructive',
-          title: 'Location Tracking Error',
-          description: errorMessage,
-        });
+        // Only show toast for actual errors, not permission denial
+        if (shouldShowToast) {
+          toast({
+            variant: 'default',
+            title: 'Location Tracking Paused',
+            description: errorMessage + '. You can manually enter your location.',
+          });
+        }
       },
       {
         enableHighAccuracy: true,

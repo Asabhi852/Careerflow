@@ -169,8 +169,24 @@ const jobMatchSuggestionsFlow = ai.defineFlow(
     outputSchema: JobMatchSuggestionsOutputSchema,
   },
   async input => {
-    const {output} = await prompt(input);
-    return output!;
+    try {
+      const {output} = await prompt(input);
+      return output!;
+    } catch (error: any) {
+      // Handle rate limit (429) and other API errors gracefully
+      if (error.message?.includes('429') || error.message?.includes('Too Many Requests') || error.message?.includes('Resource exhausted')) {
+        console.warn('[AI Job Matching] Rate limit exceeded. Please try again in a few minutes.');
+        throw new Error('AI service is temporarily unavailable due to high demand. Please try again in a few minutes or use the location-based matching feature.');
+      }
+      
+      if (error.message?.includes('500') || error.message?.includes('Internal Server Error')) {
+        console.warn('[AI Job Matching] AI service error:', error.message);
+        throw new Error('AI service is temporarily unavailable. Please try the location-based matching feature.');
+      }
+      
+      console.error('[AI Job Matching] Error generating matches:', error);
+      throw new Error('Failed to generate AI job matches. Please try the location-based matching feature or try again later.');
+    }
   }
 );
 

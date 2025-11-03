@@ -73,9 +73,17 @@ export default function AiMatchesPage() {
     return [...internal, ...external];
   }, [internalJobs, externalJobs]);
 
-  // Calculate enhanced matches with skill gaps and career advice
+  // Calculate enhanced matches with skill gaps and career advice (LOCATION-BASED ONLY)
   useEffect(() => {
     if (!userProfile || !jobs) {
+      setEnhancedMatches([]);
+      return;
+    }
+
+    // REQUIRE location for AI matching
+    const userLocation = currentLocation || userProfile.coordinates;
+    if (!userLocation) {
+      console.warn('Location required for AI job matching');
       setEnhancedMatches([]);
       return;
     }
@@ -83,59 +91,42 @@ export default function AiMatchesPage() {
     // Create enhanced profile with location data
     const enhancedProfile = {
       ...userProfile,
-      coordinates: currentLocation || userProfile.coordinates,
+      coordinates: userLocation,
     };
 
-    // Calculate enhanced matches with skill gaps
-    let calculatedMatches: EnhancedMatchScore[] = [];
-    
-    if (currentLocation && sortBy === 'distance') {
-      calculatedMatches = getTopEnhancedMatchesWithLocationFilter(enhancedProfile, jobs, {
-        maxDistance,
-        sortByDistance: true,
-        limit: 20,
-      });
-    } else if (currentLocation) {
-      calculatedMatches = getTopEnhancedMatchesWithLocationFilter(enhancedProfile, jobs, {
-        maxDistance,
-        sortByDistance: false,
-        limit: 20,
-      });
-    } else {
-      // Fallback to regular matching
-      calculatedMatches = getTopEnhancedMatches(enhancedProfile, jobs, 20);
-    }
+    // Calculate location-based matches only
+    const calculatedMatches = getTopEnhancedMatchesWithLocationFilter(enhancedProfile, jobs, {
+      maxDistance,
+      sortByDistance: sortBy === 'distance',
+      limit: 20,
+    });
 
     setEnhancedMatches(calculatedMatches);
   }, [userProfile, jobs, currentLocation, maxDistance, sortBy]);
 
-  // Calculate matches using basic algorithm (for comparison)
+  // Calculate matches using basic algorithm (LOCATION-BASED ONLY)
   const matches = useMemo(() => {
     if (!userProfile || !jobs) return [];
+
+    // REQUIRE location for matching
+    const userLocation = currentLocation || userProfile.coordinates;
+    if (!userLocation) {
+      console.warn('Location required for job matching');
+      return [];
+    }
 
     // Create enhanced profile with location data
     const enhancedProfile = {
       ...userProfile,
-      coordinates: currentLocation || userProfile.coordinates,
+      coordinates: userLocation,
     };
 
-    // Use location-aware matching if location is set
-    if (currentLocation && sortBy === 'distance') {
-      return getTopMatchesWithLocationFilter(enhancedProfile, jobs, {
-        maxDistance,
-        sortByDistance: true,
-        limit: 20,
-      });
-    } else if (currentLocation) {
-      return getTopMatchesWithLocationFilter(enhancedProfile, jobs, {
-        maxDistance,
-        sortByDistance: false,
-        limit: 20,
-      });
-    } else {
-      // Fallback to regular matching
-      return getTopMatches(enhancedProfile, jobs, 20);
-    }
+    // Use location-based matching only
+    return getTopMatchesWithLocationFilter(enhancedProfile, jobs, {
+      maxDistance,
+      sortByDistance: sortBy === 'distance',
+      limit: 20,
+    });
   }, [userProfile, jobs, currentLocation, maxDistance, sortBy]);
 
   const handleGenerateMatches = async () => {
@@ -177,12 +168,26 @@ export default function AiMatchesPage() {
         description: 'AI has found potential job matches for you.',
       });
 
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error generating job matches:', error);
+      
+      // Handle different error types
+      const errorMessage = error?.message || 'Unknown error';
+      let title = 'Error Generating Matches';
+      let description = 'Please use the location-based recommendations below instead.';
+      
+      if (errorMessage.includes('Rate limit') || errorMessage.includes('429') || errorMessage.includes('high demand')) {
+        title = 'AI Service Temporarily Unavailable';
+        description = 'Due to high demand, please use the location-based job recommendations below. They work without AI and show jobs near you.';
+      } else if (errorMessage.includes('temporarily unavailable')) {
+        description = errorMessage;
+      }
+      
       toast({
-        variant: 'destructive',
-        title: 'Error Generating Matches',
-        description: 'There was a problem contacting the AI. Please try again.',
+        variant: 'default',
+        title: title,
+        description: description,
+        duration: 6000,
       });
     } finally {
       setIsLoading(false);
@@ -207,41 +212,36 @@ export default function AiMatchesPage() {
         currentSortBy={sortBy}
       />
 
+      {/* Location Required Alert */}
+      {!currentLocation && !userProfile?.coordinates && (
+        <Alert className="bg-yellow-50 border-yellow-200">
+          <AlertCircle className="h-4 w-4 text-yellow-600" />
+          <AlertTitle className="text-yellow-900">Location Required for AI Job Matching</AlertTitle>
+          <AlertDescription className="text-yellow-800">
+            Our AI job matching feature uses location-based recommendations to find the best opportunities near you.
+            Please enable location sharing or add your location in your profile to see personalized job matches.
+          </AlertDescription>
+        </Alert>
+      )}
+
       <Card>
         <CardHeader>
-          <CardTitle>Your Personalized Job Feed</CardTitle>
+          <CardTitle>Location-Based Job Recommendations</CardTitle>
           <CardDescription>
-            {currentLocation
-              ? `Click the button below to use our AI to analyze your profile against open roles within ${maxDistance}km of your location.`
-              : 'Click the button below to use our AI to analyze your profile against open roles and suggest the best fits.'
+            {currentLocation || userProfile?.coordinates
+              ? `AI-powered job matching based on your location within ${maxDistance}km radius. Jobs are ranked by distance and match quality.`
+              : 'Enable location to see AI-powered job recommendations near you.'
             }
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {!matchResult && (
-            <div className="text-center py-10">
-              <p className="text-muted-foreground mb-4">Ready to find your next opportunity?</p>
-              <Button onClick={handleGenerateMatches} disabled={isLoading || !userProfile}>
-                {isLoading ? (
-                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Generating...</>
-                ) : (
-                  'Generate My Job Matches'
-                )}
-              </Button>
-              {!userProfile && (
-                 <p className="text-sm text-muted-foreground mt-4">Please complete your profile to enable this feature.</p>
-              )}
-            </div>
-          )}
+          {/* Removed "Generate My Job Matches" button - using location-based recommendations instead */}
 
-          {(enhancedMatches.length > 0 || recommendations.length > 0) && !matchResult && (
+          {enhancedMatches.length > 0 && !matchResult && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <h3 className="font-semibold text-lg">
-                  {currentLocation
-                    ? `AI Job Recommendations (${enhancedMatches.length} jobs within ${maxDistance}km)`
-                    : `Your Top ${enhancedMatches.length} AI Job Matches`
-                  }
+                  Location-Based Job Recommendations ({enhancedMatches.length} jobs within {maxDistance}km)
                 </h3>
                 <div className="flex items-center gap-2">
                   <Badge variant="outline">
@@ -454,15 +454,6 @@ export default function AiMatchesPage() {
                     </Card>
                   ))}
                 </div>
-              </div>
-               <div>
-                <h3 className="font-semibold text-lg mb-2">Your AI-Generated Summary for Recruiters</h3>
-                 <Alert>
-                  <AlertTitle>Recruiter-Optimized Summary</AlertTitle>
-                  <AlertDescription className="whitespace-pre-wrap">
-                    {matchResult.summaryForRecruiters}
-                  </AlertDescription>
-                </Alert>
               </div>
             </div>
           )}

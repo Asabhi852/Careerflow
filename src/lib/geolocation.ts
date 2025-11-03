@@ -98,26 +98,26 @@ export async function getCurrentLocation(): Promise<Coordinates | null> {
         resolve(coords);
       },
       (error) => {
-        // Provide more helpful error messages
+        // Handle geolocation errors gracefully
         let errorMessage = 'Error getting location';
         switch (error.code) {
           case error.PERMISSION_DENIED:
             errorMessage = 'Location permission denied by user';
-            console.error('[Geolocation] Permission denied. Please allow location access in browser settings.');
+            console.info('[Geolocation] Location permission denied. This is optional - you can still use the app without location services.');
             break;
           case error.POSITION_UNAVAILABLE:
             errorMessage = 'Location information unavailable';
-            console.error('[Geolocation] Position unavailable. GPS might be disabled.');
+            console.warn('[Geolocation] Position unavailable. GPS might be disabled.');
             break;
           case error.TIMEOUT:
             errorMessage = 'Location request timed out';
-            console.error('[Geolocation] Request timed out. Please try again.');
+            console.warn('[Geolocation] Request timed out. Please try again.');
             break;
           default:
             errorMessage = error.message;
-            console.error('[Geolocation] Unknown error:', error.message);
+            console.warn('[Geolocation] Unknown error:', error.message);
         }
-        console.warn('[Geolocation]', errorMessage);
+        // Return null gracefully - this is expected behavior
         resolve(null);
       },
       {

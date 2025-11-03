@@ -103,24 +103,48 @@ export function SignupForm() {
   const handleResumeUpload = async (event: any) => {
     const file = event.target.files?.[0];
     if (file) {
+      // Validate file type
+      const validTypes = [
+        'application/pdf',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'application/msword',
+        'text/plain'
+      ];
+      const validExtensions = ['.pdf', '.docx', '.doc', '.txt'];
+      const hasValidType = validTypes.includes(file.type) || 
+                          validExtensions.some(ext => file.name.toLowerCase().endsWith(ext));
+      
+      if (!hasValidType) {
+        toast({
+          variant: 'destructive',
+          title: 'Invalid file type',
+          description: 'Please upload a PDF, DOCX, DOC, or TXT file.',
+        });
+        return;
+      }
+      
       if (file.size > 5 * 1024 * 1024) { // 5MB limit
         toast({
           variant: 'destructive',
           title: 'File too large',
-          description: 'Resume file must be less than 5MB.',
+          description: 'Please upload a resume under 5MB.',
         });
-        return false;
+        return;
       }
+      
       setResumeFile(file);
+      
+      toast({
+        title: 'Processing resume...',
+        description: 'Extracting information from your resume.',
+      });
       
       // Parse resume and auto-fill form
       const success = await parseResumeAndFillForm(file);
       if (success) {
         setCurrentStep('basic');
       }
-      return success;
     }
-    return false;
   };
 
   const handleResumeDrop = useCallback(async (e: React.DragEvent<HTMLDivElement>) => {
@@ -128,11 +152,8 @@ export function SignupForm() {
     e.stopPropagation();
     
     const file = e.dataTransfer.files?.[0];
-    if (file && file.type === 'application/pdf' || file?.name.endsWith('.docx')) {
-      const success = await handleResumeUpload({ target: { files: [file] } });
-      if (success) {
-        setCurrentStep('basic');
-      }
+    if (file) {
+      await handleResumeUpload({ target: { files: [file] } });
     }
   }, []);
 
@@ -259,10 +280,22 @@ export function SignupForm() {
       });
     } catch (error: any) {
       console.error('Resume parsing error:', error);
+      
+      // Provide specific error messages
+      let errorMessage = 'Could not parse your resume. Please fill the form manually.';
+      
+      if (error.message?.includes('PDF')) {
+        errorMessage = 'Failed to extract text from PDF. The file may be image-based, corrupted, or password-protected. Try converting to DOCX or fill manually.';
+      } else if (error.message?.includes('Word') || error.message?.includes('DOCX')) {
+        errorMessage = 'Failed to parse Word document. The file may be corrupted. Try saving as PDF or fill manually.';
+      } else if (error.message?.includes('API') || error.message?.includes('parse-resume')) {
+        errorMessage = 'Resume parsing service is unavailable. Please fill the form manually.';
+      }
+      
       toast({
         variant: 'destructive',
         title: 'Resume parsing failed',
-        description: 'Could not parse your resume. Please fill the form manually.',
+        description: errorMessage,
       });
     } finally {
       setIsParsing(false);
@@ -277,40 +310,65 @@ export function SignupForm() {
         try {
           const content = e.target?.result;
           
-          if (file.type === 'application/pdf') {
-            // For PDF files, use pdfjs-dist
+          if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+            // For PDF files, use API route to parse on server side
             try {
-              const pdfjsLib = await import('pdfjs-dist');
-              
-              // Set worker source
-              pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
-              
-              const typedArray = new Uint8Array(content as ArrayBuffer);
-              const pdf = await pdfjsLib.getDocument({ data: typedArray }).promise;
-              
-              let fullText = '';
-              
-              // Extract text from each page
-              for (let i = 1; i <= pdf.numPages; i++) {
-                const page = await pdf.getPage(i);
-                const textContent = await page.getTextContent();
-                const pageText = textContent.items
-                  .map((item: any) => item.str)
-                  .join(' ');
-                fullText += pageText + '\n';
+              if (!content) {
+                throw new Error('No content to parse');
               }
               
+              // Convert ArrayBuffer to base64 for API transmission
+              const bytes = new Uint8Array(content as ArrayBuffer);
+              let binary = '';
+              for (let i = 0; i < bytes.byteLength; i++) {
+                binary += String.fromCharCode(bytes[i]);
+              }
+              const base64 = btoa(binary);
+              
+              console.log('Sending PDF to server for parsing...');
+              
+              // Send to API route for server-side parsing
+              const response = await fetch('/api/parse-pdf', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ pdfData: base64 }),
+              });
+              
+              if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.error || 'Failed to parse PDF');
+              }
+              
+              const result = await response.json();
+              const fullText = result.text || '';
+              
+              if (!fullText || fullText.trim().length === 0) {
+                throw new Error('No text could be extracted from PDF. The PDF may be image-based or empty.');
+              }
+              
+              console.log(`Successfully extracted ${fullText.length} characters from PDF`);
               resolve(fullText);
-            } catch (pdfError) {
+            } catch (pdfError: any) {
               console.error('PDF parsing error:', pdfError);
-              reject(new Error('Failed to parse PDF file'));
+              const errorMessage = pdfError?.message || 'Unknown error';
+              reject(new Error(`Failed to parse PDF file: ${errorMessage}`));
             }
           } else if (file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || 
-                     file.type === 'application/msword') {
-            // For Word documents, read as text (basic implementation)
-            // For better parsing, consider using mammoth.js
-            const text = content as string;
-            resolve(text);
+                     file.type === 'application/msword' || 
+                     file.name.endsWith('.docx') || 
+                     file.name.endsWith('.doc')) {
+            // For Word documents, use mammoth.js to extract text
+            try {
+              const mammoth = await import('mammoth');
+              const arrayBuffer = content as ArrayBuffer;
+              const result = await mammoth.extractRawText({ arrayBuffer });
+              resolve(result.value);
+            } catch (docxError) {
+              console.error('DOCX parsing error:', docxError);
+              reject(new Error('Failed to parse Word document. Please ensure mammoth is installed.'));
+            }
           } else {
             // For plain text files
             resolve(content as string);
@@ -322,8 +380,14 @@ export function SignupForm() {
       
       reader.onerror = () => reject(new Error('Failed to read file'));
       
-      // Read as ArrayBuffer for PDF, text for others
-      if (file.type === 'application/pdf') {
+      // Read as ArrayBuffer for PDF and DOCX, text for others
+      const isPDF = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+      const isWord = file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+                     file.type === 'application/msword' ||
+                     file.name.toLowerCase().endsWith('.docx') || 
+                     file.name.toLowerCase().endsWith('.doc');
+      
+      if (isPDF || isWord) {
         reader.readAsArrayBuffer(file);
       } else {
         reader.readAsText(file);

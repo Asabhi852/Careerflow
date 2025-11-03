@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -8,33 +8,55 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { MessageCircle, X, Send } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
+interface Message {
+  id: string;
+  sequence: number;
+  text: string;
+  sender: 'user' | 'bot';
+}
+
 export function ChatBot() {
   const [isOpen, setIsOpen] = useState(false);
-  const [messages, setMessages] = useState([
-    { id: 1, text: "Hi! I'm your career assistant. How can I help you find your next job opportunity?", sender: 'bot' }
+  const [messages, setMessages] = useState<Message[]>([
+    { id: 'msg-0', sequence: 0, text: "Hi! I'm your career assistant. How can I help you find your next job opportunity?", sender: 'bot' }
   ]);
   const [inputValue, setInputValue] = useState('');
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messageCounterRef = useRef(1);
+
+  // Auto-scroll to bottom
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, 100);
+    return () => clearTimeout(timeoutId);
+  }, [messages]);
 
   const handleSendMessage = () => {
     if (!inputValue.trim()) return;
 
-    const newMessage = {
-      id: messages.length + 1,
+    const newMessage: Message = {
+      id: `msg-${messageCounterRef.current}`,
+      sequence: messageCounterRef.current++,
       text: inputValue,
       sender: 'user'
     };
 
-    setMessages([...messages, newMessage]);
+    setMessages(prev => [...prev, newMessage]);
     setInputValue('');
 
     // Simulate bot response
     setTimeout(() => {
-      const botResponse = {
-        id: messages.length + 2,
+      const botResponse: Message = {
+        id: `msg-${messageCounterRef.current}`,
+        sequence: messageCounterRef.current++,
         text: "Thanks for your message! I'm here to help you with job search, resume tips, and career advice. What specific area would you like assistance with?",
         sender: 'bot'
       };
-      setMessages(prev => [...prev, botResponse]);
+      setMessages(prev => {
+        const newMessages = [...prev, botResponse];
+        return newMessages.sort((a, b) => a.sequence - b.sequence);
+      });
     }, 1000);
   };
 
@@ -79,7 +101,7 @@ export function ChatBot() {
 
           <CardContent className="p-0 flex flex-col h-full">
             <ScrollArea className="flex-1 p-4">
-              <div className="space-y-4">
+              <div className="space-y-4 min-h-full">
                 {messages.map((message) => (
                   <div
                     key={message.id}
@@ -90,16 +112,17 @@ export function ChatBot() {
                   >
                     <div
                       className={cn(
-                        "max-w-[80%] px-3 py-2 rounded-lg text-sm",
+                        "max-w-[80%] px-3 py-2 rounded-lg text-sm break-words overflow-hidden",
                         message.sender === 'user'
                           ? "bg-primary text-primary-foreground"
                           : "bg-muted"
                       )}
                     >
-                      {message.text}
+                      <p className="whitespace-pre-wrap break-words">{message.text}</p>
                     </div>
                   </div>
                 ))}
+                <div ref={messagesEndRef} />
               </div>
             </ScrollArea>
 

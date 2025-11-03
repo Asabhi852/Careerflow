@@ -44,20 +44,57 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // REQUIRE location for location-based AI matching
+    if (!userProfile.coordinates && !userProfile.location) {
+      return NextResponse.json(
+        { 
+          error: 'Location required for AI job matching',
+          message: 'Please add your location in your profile or enable location services to use AI-powered job recommendations.',
+          matches: [],
+          totalMatches: 0
+        },
+        { status: 400 }
+      );
+    }
+
     // Get available jobs
     const jobs = await getAvailableJobs();
 
-    // Calculate enhanced matches
-    const matches = getTopEnhancedMatchesWithLocationFilter(
-      userProfile,
-      jobs,
-      {
-        maxDistance,
-        sortByDistance,
-        limit,
-        minScore,
-      }
-    );
+    if (!jobs || jobs.length === 0) {
+      console.warn('No jobs available for matching');
+      return NextResponse.json({
+        matches: [],
+        totalMatches: 0,
+        userProfile: {
+          id: userProfile.id,
+          firstName: userProfile.firstName,
+          lastName: userProfile.lastName,
+          skills: userProfile.skills,
+          location: userProfile.location,
+          availability: userProfile.availability,
+        },
+        summary: 'No jobs available at the moment. Please check back later.',
+      });
+    }
+
+    // Calculate enhanced matches with error handling
+    let matches = [];
+    try {
+      matches = getTopEnhancedMatchesWithLocationFilter(
+        userProfile,
+        jobs,
+        {
+          maxDistance,
+          sortByDistance,
+          limit,
+          minScore,
+        }
+      );
+    } catch (matchError) {
+      console.error('Error calculating matches:', matchError);
+      // Fallback to empty matches
+      matches = [];
+    }
 
     // Prepare response
     const response = {
@@ -65,19 +102,19 @@ export async function POST(request: NextRequest) {
         jobId: match.jobId,
         score: match.score,
         matchQuality: match.matchQuality,
-        matchedSkills: match.matchedSkills,
-        reasons: match.reasons,
+        matchedSkills: match.matchedSkills || [],
+        reasons: match.reasons || [],
         distance: match.distance,
-        compatibilityFactors: match.compatibilityFactors,
-        ...(includeSkillGaps && { skillGaps: match.skillGaps }),
-        ...(includeCareerAdvice && { careerAdvice: match.careerAdvice }),
+        compatibilityFactors: match.compatibilityFactors || {},
+        ...(includeSkillGaps && { skillGaps: match.skillGaps || [] }),
+        ...(includeCareerAdvice && { careerAdvice: match.careerAdvice || '' }),
       })),
       totalMatches: matches.length,
       userProfile: {
         id: userProfile.id,
         firstName: userProfile.firstName,
         lastName: userProfile.lastName,
-        skills: userProfile.skills,
+        skills: userProfile.skills || [],
         location: userProfile.location,
         availability: userProfile.availability,
       },
@@ -87,8 +124,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(response);
   } catch (error) {
     console.error('Error in job matching API:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Internal server error';
+    console.error('Full error details:', errorMessage);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { 
+        error: 'Failed to generate job matches',
+        details: process.env.NODE_ENV === 'development' ? errorMessage : undefined,
+        matches: [],
+        totalMatches: 0
+      },
       { status: 500 }
     );
   }
@@ -119,20 +163,56 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // REQUIRE location for location-based AI matching
+    if (!userProfile.coordinates && !userProfile.location) {
+      return NextResponse.json(
+        { 
+          error: 'Location required for AI job matching',
+          message: 'Please add your location in your profile or enable location services to use AI-powered job recommendations.',
+          matches: [],
+          totalMatches: 0
+        },
+        { status: 400 }
+      );
+    }
+
     // Get available jobs
     const jobs = await getAvailableJobs();
 
-    // Calculate enhanced matches
-    const matches = getTopEnhancedMatchesWithLocationFilter(
-      userProfile,
-      jobs,
-      {
-        maxDistance,
-        sortByDistance,
-        limit,
-        minScore,
-      }
-    );
+    if (!jobs || jobs.length === 0) {
+      console.warn('No jobs available for matching');
+      return NextResponse.json({
+        matches: [],
+        totalMatches: 0,
+        userProfile: {
+          id: userProfile.id,
+          firstName: userProfile.firstName,
+          lastName: userProfile.lastName,
+          skills: userProfile.skills,
+          location: userProfile.location,
+          availability: userProfile.availability,
+        },
+        summary: 'No jobs available at the moment. Please check back later.',
+      });
+    }
+
+    // Calculate enhanced matches with error handling
+    let matches = [];
+    try {
+      matches = getTopEnhancedMatchesWithLocationFilter(
+        userProfile,
+        jobs,
+        {
+          maxDistance,
+          sortByDistance,
+          limit,
+          minScore,
+        }
+      );
+    } catch (matchError) {
+      console.error('Error calculating matches:', matchError);
+      matches = [];
+    }
 
     // Prepare response
     const response = {
@@ -140,19 +220,19 @@ export async function GET(request: NextRequest) {
         jobId: match.jobId,
         score: match.score,
         matchQuality: match.matchQuality,
-        matchedSkills: match.matchedSkills,
-        reasons: match.reasons,
+        matchedSkills: match.matchedSkills || [],
+        reasons: match.reasons || [],
         distance: match.distance,
-        compatibilityFactors: match.compatibilityFactors,
-        skillGaps: match.skillGaps,
-        careerAdvice: match.careerAdvice,
+        compatibilityFactors: match.compatibilityFactors || {},
+        skillGaps: match.skillGaps || [],
+        careerAdvice: match.careerAdvice || '',
       })),
       totalMatches: matches.length,
       userProfile: {
         id: userProfile.id,
         firstName: userProfile.firstName,
         lastName: userProfile.lastName,
-        skills: userProfile.skills,
+        skills: userProfile.skills || [],
         location: userProfile.location,
         availability: userProfile.availability,
       },
@@ -161,9 +241,16 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(response);
   } catch (error) {
-    console.error('Error in job matching API:', error);
+    console.error('Error in job matching API (GET):', error);
+    const errorMessage = error instanceof Error ? error.message : 'Internal server error';
+    console.error('Full error details:', errorMessage);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { 
+        error: 'Failed to generate job matches',
+        details: process.env.NODE_ENV === 'development' ? errorMessage : undefined,
+        matches: [],
+        totalMatches: 0
+      },
       { status: 500 }
     );
   }
@@ -192,36 +279,45 @@ async function getUserProfile(userId: string): Promise<UserProfile | null> {
  * Get available jobs from various sources
  */
 async function getAvailableJobs(): Promise<JobPosting[]> {
+  const allJobs: JobPosting[] = [];
+  
   try {
     // First try to get jobs from Firestore
     const { firestore } = initializeFirebase();
     const jobsCollection = collection(firestore, 'jobs');
     const jobsSnapshot = await getDocs(jobsCollection);
     
-    const firestoreJobs: JobPosting[] = [];
     jobsSnapshot.forEach((doc) => {
-      firestoreJobs.push({ id: doc.id, ...doc.data() } as JobPosting);
+      try {
+        const jobData = doc.data();
+        if (jobData) {
+          allJobs.push({ id: doc.id, ...jobData } as JobPosting);
+        }
+      } catch (docError) {
+        console.error(`Error processing job document ${doc.id}:`, docError);
+      }
     });
 
-    // Also fetch from external job sources (LinkedIn, Naukri)
-    try {
-      const externalJobs = await fetchJobsBySource('all', { limit: 100 });
-      
-      // Combine internal and external jobs
-      const allJobs = [...firestoreJobs, ...externalJobs];
-      console.log(`AI Matching: Found ${firestoreJobs.length} internal jobs and ${externalJobs.length} external jobs`);
-      
-      return allJobs;
-    } catch (externalError) {
-      console.error('Error fetching external jobs for AI matching:', externalError);
-      // Return internal jobs even if external fetch fails
-    }
-
-    return firestoreJobs;
-  } catch (error) {
-    console.error('Error fetching jobs:', error);
-    return [];
+    console.log(`AI Matching: Found ${allJobs.length} internal jobs from Firestore`);
+  } catch (firestoreError) {
+    console.error('Error fetching internal jobs from Firestore:', firestoreError);
   }
+
+  // Also fetch from external job sources (LinkedIn, Naukri)
+  try {
+    const externalJobs = await fetchJobsBySource('all', { limit: 100 });
+    
+    if (externalJobs && Array.isArray(externalJobs)) {
+      allJobs.push(...externalJobs);
+      console.log(`AI Matching: Found ${externalJobs.length} external jobs`);
+    }
+  } catch (externalError) {
+    console.error('Error fetching external jobs for AI matching:', externalError);
+    // Continue with internal jobs only
+  }
+
+  console.log(`AI Matching: Total jobs available: ${allJobs.length}`);
+  return allJobs;
 }
 
 /**

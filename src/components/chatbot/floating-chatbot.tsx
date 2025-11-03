@@ -14,6 +14,8 @@ import { LanguageSelector } from './language-selector';
 import { useI18n } from '@/i18n/I18nProvider';
 
 interface Message {
+  id: string;
+  sequence: number;
   sender: 'user' | 'bot';
   text: string;
   timestamp: Date;
@@ -30,7 +32,9 @@ export function FloatingChatbot() {
   const [isMounted, setIsMounted] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const messageCounterRef = useRef(0);
 
   useEffect(() => {
     setIsMounted(true);
@@ -40,7 +44,10 @@ export function FloatingChatbot() {
   useEffect(() => {
     if (!isMounted) return;
     
+    messageCounterRef.current = 0;
     const welcomeMessage: Message = {
+      id: `msg-${messageCounterRef.current}`,
+      sequence: messageCounterRef.current++,
       sender: 'bot',
       text: t('chatbot_welcome'),
       timestamp: new Date()
@@ -50,13 +57,14 @@ export function FloatingChatbot() {
 
   // Auto-scroll to bottom
   const scrollToBottom = () => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
   useEffect(() => {
-    scrollToBottom();
+    const timeoutId = setTimeout(() => {
+      scrollToBottom();
+    }, 100);
+    return () => clearTimeout(timeoutId);
   }, [messages]);
 
   // Focus input when chat opens
@@ -82,6 +90,8 @@ export function FloatingChatbot() {
     if (!input.trim() || isLoading) return;
 
     const userMessage: Message = {
+      id: `msg-${messageCounterRef.current}`,
+      sequence: messageCounterRef.current++,
       sender: 'user',
       text: input.trim(),
       timestamp: new Date()
@@ -103,12 +113,17 @@ export function FloatingChatbot() {
 
       if (result && result.answer) {
         const botMessage: Message = {
+          id: `msg-${messageCounterRef.current}`,
+          sequence: messageCounterRef.current++,
           sender: 'bot',
           text: result.answer,
           timestamp: new Date()
         };
 
-        setMessages((prev) => [...prev, botMessage]);
+        setMessages((prev) => {
+          const newMessages = [...prev, botMessage];
+          return newMessages.sort((a, b) => a.sequence - b.sequence);
+        });
       } else {
         throw new Error('Invalid response from AI service');
       }
@@ -116,12 +131,17 @@ export function FloatingChatbot() {
       console.error('Chatbot error:', error);
 
       const errorMessage: Message = {
+        id: `msg-${messageCounterRef.current}`,
+        sequence: messageCounterRef.current++,
         sender: 'bot',
         text: "I'm sorry, I'm having trouble right now. Please try again in a moment.",
         timestamp: new Date()
       };
 
-      setMessages((prev) => [...prev, errorMessage]);
+      setMessages((prev) => {
+        const newMessages = [...prev, errorMessage];
+        return newMessages.sort((a, b) => a.sequence - b.sequence);
+      });
     } finally {
       setIsLoading(false);
     }
@@ -232,10 +252,10 @@ export function FloatingChatbot() {
                 {/* Messages Area */}
                 <div className="flex-1 overflow-hidden bg-gradient-to-b from-gray-50 to-white">
                   <ScrollArea className="h-full">
-                    <div ref={scrollRef} className="p-4 space-y-4">
-                      {messages.map((message, index) => (
+                    <div className="p-4 space-y-4 min-h-full">
+                      {messages.map((message) => (
                         <div
-                          key={index}
+                          key={message.id}
                           className={cn(
                             "flex gap-2 animate-in slide-in-from-bottom-2",
                             message.sender === 'user' ? 'justify-end' : 'justify-start'
@@ -251,13 +271,13 @@ export function FloatingChatbot() {
                           
                           <div
                             className={cn(
-                              "max-w-[75%] px-3 py-2 rounded-2xl text-sm",
+                              "max-w-[75%] px-3 py-2 rounded-2xl text-sm break-words overflow-hidden",
                               message.sender === 'user'
                                 ? 'bg-gradient-to-br from-blue-600 to-blue-700 text-white shadow-md rounded-br-sm'
                                 : 'bg-white text-gray-900 border border-gray-200 shadow-sm rounded-bl-sm'
                             )}
                           >
-                            <p className="whitespace-pre-wrap leading-relaxed">{message.text}</p>
+                            <p className="whitespace-pre-wrap leading-relaxed break-words overflow-wrap-anywhere">{message.text}</p>
                             <p className={cn(
                               "text-xs mt-1",
                               message.sender === 'user' ? 'text-blue-100' : 'text-gray-500'
@@ -313,6 +333,7 @@ export function FloatingChatbot() {
                           </div>
                         </div>
                       )}
+                      <div ref={messagesEndRef} />
                     </div>
                   </ScrollArea>
                 </div>

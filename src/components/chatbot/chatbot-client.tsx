@@ -62,6 +62,8 @@ declare global {
 }
 
 interface Message {
+  id: string;
+  sequence: number;
   sender: 'user' | 'bot';
   text: string;
   timestamp: Date;
@@ -78,8 +80,10 @@ export function ChatbotClient() {
   const [isClient, setIsClient] = useState(false);
   const [speechSupported, setSpeechSupported] = useState(false);
   const scrollAreaViewport = useRef<HTMLDivElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const messageCounterRef = useRef(0);
 
   // Initialize client-side rendering
   useEffect(() => {
@@ -98,7 +102,10 @@ export function ChatbotClient() {
       te: '👋 హలో! నేను మీ AI కెరీర్ అసిస్టెంట్. నేను మీకు సహాయం చేయగలను:\n\n• ఉద్యోగ శోధన వ్యూహాలు మరియు చిట్కాలు\n• రిజ్యూమ్ రాయడం మరియు మెరుగుదల\n• ఇంటర్వ్యూ సిద్ధత\n• కెరీర్ ప్లానింగ్ మరియు సలహాలు\n• నైపుణ్య అభివృద్ధి సూచనలు\n\nమీరు ఏమి తెలుసుకోవాలనుకుంటున్నారు?',
       ta: '👋 வணக்கம்! நான் உங்கள் AI தொழில் உதவியாளர். நான் உதவ முடியும்:\n\n• வேலை தேடல் யுக்திகள் மற்றும் குறிப்புகள்\n• ரெச்யூமே எழுத்து மற்றும் மேம்பாடு\n• நேர்காணல் தயாரிப்பு\n• தொழில் திட்டமிடம் மற்றும் ஆலோசனை\n• திறன் மேம்பாட்டு பரிந்துரைகள்\n\nநீங்கள் என்னத் தெரிந்து கொள்ள விரும்புகிறீர்கள்?',
     };
+    messageCounterRef.current = 0;
     const welcomeMessage: Message = {
+      id: `msg-${messageCounterRef.current}`,
+      sequence: messageCounterRef.current++,
       sender: 'bot',
       text: welcomes[language] || welcomes.en,
       timestamp: new Date()
@@ -108,19 +115,14 @@ export function ChatbotClient() {
 
   // Auto-scroll to bottom when messages change
   const scrollToBottom = () => {
-    if (scrollAreaViewport.current) {
-      const viewport = scrollAreaViewport.current;
-      setTimeout(() => {
-        viewport.scrollTo({
-          top: viewport.scrollHeight,
-          behavior: 'smooth'
-        });
-      }, 100);
-    }
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
   useEffect(() => {
-    scrollToBottom();
+    const timeoutId = setTimeout(() => {
+      scrollToBottom();
+    }, 100);
+    return () => clearTimeout(timeoutId);
   }, [messages]);
 
   // Initialize speech recognition
@@ -173,11 +175,16 @@ export function ChatbotClient() {
   // Helper function to add bot message
   const addBotMessage = (text: string) => {
     const botMessage: Message = {
+      id: `msg-${messageCounterRef.current}`,
+      sequence: messageCounterRef.current++,
       sender: 'bot',
       text,
       timestamp: new Date()
     };
-    setMessages((prev) => [...prev, botMessage]);
+    setMessages((prev) => {
+      const newMessages = [...prev, botMessage];
+      return newMessages.sort((a, b) => a.sequence - b.sequence);
+    });
   };
 
   // Toggle voice input
@@ -234,6 +241,8 @@ export function ChatbotClient() {
     if (!input.trim() || isLoading) return;
 
     const userMessage: Message = {
+      id: `msg-${messageCounterRef.current}`,
+      sequence: messageCounterRef.current++,
       sender: 'user',
       text: input.trim(),
       timestamp: new Date()
@@ -258,12 +267,17 @@ export function ChatbotClient() {
 
       if (result && result.answer) {
         const botMessage: Message = {
+          id: `msg-${messageCounterRef.current}`,
+          sequence: messageCounterRef.current++,
           sender: 'bot',
           text: result.answer,
           timestamp: new Date()
         };
 
-        setMessages((prev) => [...prev, botMessage]);
+        setMessages((prev) => {
+          const newMessages = [...prev, botMessage];
+          return newMessages.sort((a, b) => a.sequence - b.sequence);
+        });
 
         // Optionally speak the response
         if (isSpeaking) {
@@ -276,12 +290,17 @@ export function ChatbotClient() {
       console.error('Chatbot error:', error);
 
       const errorMessage: Message = {
+        id: `msg-${messageCounterRef.current}`,
+        sequence: messageCounterRef.current++,
         sender: 'bot',
         text: "I'm sorry, I'm experiencing technical difficulties right now. Please try again in a moment. If the problem persists, you can try rephrasing your question or contact support.",
         timestamp: new Date()
       };
 
-      setMessages((prev) => [...prev, errorMessage]);
+      setMessages((prev) => {
+        const newMessages = [...prev, errorMessage];
+        return newMessages.sort((a, b) => a.sequence - b.sequence);
+      });
     } finally {
       setIsLoading(false);
       
@@ -364,10 +383,10 @@ export function ChatbotClient() {
         {/* Chat Messages Area */}
         <div className="flex-1 bg-gradient-to-b from-gray-50 to-white p-6" style={{ height: 'calc(80vh - 160px)' }}>
           <ScrollArea className="h-full pr-4" viewportRef={scrollAreaViewport}>
-            <div className="space-y-4">
-              {messages.map((message, index) => (
+            <div className="space-y-4 min-h-full">
+              {messages.map((message) => (
                 <div
-                  key={index}
+                  key={message.id}
                   className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'} animate-in slide-in-from-bottom-2 duration-300`}
                 >
                   <div className={`flex items-start gap-3 max-w-[85%] ${message.sender === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
@@ -386,13 +405,13 @@ export function ChatbotClient() {
                     )}
                     
                     <div
-                      className={`px-4 py-3 rounded-2xl shadow-sm ${
+                      className={`px-4 py-3 rounded-2xl shadow-sm break-words overflow-hidden ${
                         message.sender === 'user'
                           ? 'bg-gradient-to-br from-blue-600 to-blue-700 text-white rounded-br-md'
                           : 'bg-white text-gray-900 border border-gray-200 rounded-bl-md'
                       }`}
                     >
-                      <p className="text-sm whitespace-pre-wrap leading-relaxed">{message.text}</p>
+                      <p className="text-sm whitespace-pre-wrap leading-relaxed break-words">{message.text}</p>
                       
                       <div className={`text-xs mt-2 ${
                         message.sender === 'user' ? 'text-blue-100' : 'text-gray-500'
@@ -403,6 +422,7 @@ export function ChatbotClient() {
                   </div>
                 </div>
               ))}
+              <div ref={messagesEndRef} />
 
               {isLoading && (
                 <div className="flex justify-start animate-in slide-in-from-bottom-2">

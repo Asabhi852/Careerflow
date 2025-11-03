@@ -118,15 +118,35 @@ export function useEnhancedAIMatches(params: UseEnhancedAIMatchesParams = {}) {
         });
 
         if (!response.ok) {
-          throw new Error('Failed to fetch enhanced matches');
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || `HTTP ${response.status}: Failed to fetch matches`);
         }
 
         const data = await response.json();
-        setEnhancedMatches(data.matches);
-        setMatchingSummary(generateMatchingSummary(data.matches));
+        
+        // Ensure matches is an array
+        const matches = Array.isArray(data.matches) ? data.matches : [];
+        setEnhancedMatches(matches);
+        
+        if (matches.length > 0) {
+          setMatchingSummary(generateMatchingSummary(matches));
+        } else {
+          setMatchingSummary({
+            totalMatches: 0,
+            excellentMatches: 0,
+            goodMatches: 0,
+            averageScore: 0,
+            topSkills: [],
+            skillGaps: [],
+            recommendations: ['No matches found. Try updating your profile with more skills and experience.'],
+          });
+        }
       } catch (err) {
         console.error('Error fetching enhanced AI matches:', err);
-        setError('Failed to calculate enhanced AI matches');
+        const errorMessage = err instanceof Error ? err.message : 'Failed to calculate AI matches';
+        setError(errorMessage);
+        setEnhancedMatches([]);
+        setMatchingSummary(null);
       } finally {
         setIsLoading(false);
       }
