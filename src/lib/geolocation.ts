@@ -65,25 +65,37 @@ export function formatDistance(distanceKm: number): string {
  */
 export async function getCurrentLocation(): Promise<Coordinates | null> {
   return new Promise((resolve) => {
+    // Check if running in browser
+    if (typeof window === 'undefined') {
+      console.log('[Geolocation] Not running in browser');
+      resolve(null);
+      return;
+    }
+
     // Check if running in secure context (HTTPS or localhost)
-    if (typeof window !== 'undefined' && !window.isSecureContext) {
-      // Silently fail when not in secure context
+    if (!window.isSecureContext) {
+      console.warn('[Geolocation] Not in secure context. Geolocation requires HTTPS or localhost.');
+      console.log('[Geolocation] Current origin:', window.location.origin);
       resolve(null);
       return;
     }
 
     if (!navigator.geolocation) {
-      console.warn('Geolocation is not supported by this browser');
+      console.warn('[Geolocation] Geolocation is not supported by this browser');
       resolve(null);
       return;
     }
 
+    console.log('[Geolocation] Requesting user location...');
+
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        resolve({
+        const coords = {
           latitude: position.coords.latitude,
           longitude: position.coords.longitude,
-        });
+        };
+        console.log('[Geolocation] Location obtained:', coords);
+        resolve(coords);
       },
       (error) => {
         // Provide more helpful error messages
@@ -91,23 +103,27 @@ export async function getCurrentLocation(): Promise<Coordinates | null> {
         switch (error.code) {
           case error.PERMISSION_DENIED:
             errorMessage = 'Location permission denied by user';
+            console.error('[Geolocation] Permission denied. Please allow location access in browser settings.');
             break;
           case error.POSITION_UNAVAILABLE:
             errorMessage = 'Location information unavailable';
+            console.error('[Geolocation] Position unavailable. GPS might be disabled.');
             break;
           case error.TIMEOUT:
             errorMessage = 'Location request timed out';
+            console.error('[Geolocation] Request timed out. Please try again.');
             break;
           default:
             errorMessage = error.message;
+            console.error('[Geolocation] Unknown error:', error.message);
         }
-        console.warn(errorMessage);
+        console.warn('[Geolocation]', errorMessage);
         resolve(null);
       },
       {
-        enableHighAccuracy: false,
-        timeout: 10000,
-        maximumAge: 300000, // Cache for 5 minutes
+        enableHighAccuracy: true, // Changed to true for better accuracy
+        timeout: 15000, // Increased timeout to 15 seconds
+        maximumAge: 60000, // Reduced cache to 1 minute for fresher location
       }
     );
   });

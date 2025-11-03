@@ -18,43 +18,196 @@ import { CandidateSearch, type SearchFilters } from '@/components/candidates/can
 import { useGeolocation } from '@/hooks/use-geolocation';
 import { sortByDistance, geocodeLocation, formatDistance } from '@/lib/geolocation';
 // @ts-ignore - Lucide icons import issue
-import { MapPin, Navigation } from 'lucide-react';
+import { MapPin, Navigation, Briefcase, GraduationCap, Mail, Phone, Globe, Calendar, Award, Target } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { LocationBanner } from '@/components/location/location-banner';
 import { LocationIndicator } from '@/components/location/location-indicator';
 
 function CandidateCard({ profile }: { profile: UserProfile }) {
     return (
-        <Card>
-            <CardHeader className="flex-row items-center gap-4">
-                <UserAvatar user={profile} size="lg" />
-                <div className="flex-1">
-                    <CardTitle className="font-headline text-2xl">{profile.firstName} {profile.lastName}</CardTitle>
-                    <CardDescription className="flex items-center gap-2">
-                        <MapPin className="h-3 w-3" />
-                        {profile.location}
-                    </CardDescription>
-                    {profile.distance !== undefined && (
-                        <CardDescription className="flex items-center gap-2 text-primary mt-1">
-                            <Navigation className="h-3 w-3" />
-                            {formatDistance(profile.distance)}
-                        </CardDescription>
-                    )}
+        <Card className="hover:shadow-lg transition-shadow">
+            <CardHeader className="pb-3">
+                <div className="flex items-start gap-4">
+                    <UserAvatar user={profile} size="lg" />
+                    <div className="flex-1 min-w-0">
+                        <CardTitle className="text-xl font-bold truncate">
+                            {profile.firstName} {profile.lastName}
+                        </CardTitle>
+                        {profile.jobTitle && (
+                            <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
+                                <Briefcase className="h-3 w-3" />
+                                {profile.jobTitle}
+                            </p>
+                        )}
+                        <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
+                            <MapPin className="h-3 w-3" />
+                            {profile.location || 'Location not specified'}
+                        </p>
+                        {profile.distance !== undefined && (
+                            <p className="text-sm text-primary flex items-center gap-1 mt-1">
+                                <Navigation className="h-3 w-3" />
+                                {formatDistance(profile.distance)}
+                            </p>
+                        )}
+                    </div>
                 </div>
             </CardHeader>
-            <CardContent>
-                {profile.skills && profile.skills.length > 0 && (
-                     <div className="flex flex-wrap gap-2 mb-4">
-                        {profile.skills.slice(0, 4).map((skill) => (
-                            // @ts-ignore - Badge children prop
-                            <Badge key={skill} variant="secondary">{skill}</Badge>
-                        ))}
-                        {/* @ts-ignore - Badge children prop */}
-                        {profile.skills.length > 4 && <Badge variant="outline">+{profile.skills.length - 4}</Badge>}
+            <CardContent className="space-y-4">
+                {/* Bio */}
+                {profile.bio && (
+                    <div>
+                        <p className="text-sm text-muted-foreground line-clamp-2">
+                            {profile.bio}
+                        </p>
                     </div>
                 )}
-                 <Button asChild className="w-full">
-                    <Link href={`/candidates/${profile.id}`}>View Profile</Link>
+
+                {/* Contact Information */}
+                <div className="space-y-2">
+                    {profile.email && (
+                        <div className="flex items-center gap-2 text-sm">
+                            <Mail className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                            <span className="truncate">{profile.email}</span>
+                        </div>
+                    )}
+                    {profile.phone && (
+                        <div className="flex items-center gap-2 text-sm">
+                            <Phone className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                            <span>{profile.phone}</span>
+                        </div>
+                    )}
+                    {profile.website && (
+                        <div className="flex items-center gap-2 text-sm">
+                            <Globe className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                            <a href={profile.website} target="_blank" rel="noopener noreferrer" 
+                               className="text-primary hover:underline truncate">
+                                {profile.website.replace(/^https?:\/\//, '')}
+                            </a>
+                        </div>
+                    )}
+                </div>
+
+                {/* Education */}
+                {profile.education && profile.education.length > 0 && (
+                    <div>
+                        <h4 className="text-sm font-semibold flex items-center gap-2 mb-2">
+                            <GraduationCap className="h-4 w-4" />
+                            Education
+                        </h4>
+                        <div className="space-y-1">
+                            {profile.education.slice(0, 2).map((edu, index) => (
+                                <div key={index} className="text-sm">
+                                    {typeof edu === 'string' ? (
+                                        <p className="font-medium">{edu}</p>
+                                    ) : (
+                                        <>
+                                            <p className="font-medium">{edu.degree || edu.level}</p>
+                                            <p className="text-muted-foreground text-xs">{edu.institution}</p>
+                                            {(edu.endYear || edu.startYear) && (
+                                                <p className="text-muted-foreground text-xs">
+                                                    {edu.startYear} - {edu.endYear || 'Present'}
+                                                </p>
+                                            )}
+                                        </>
+                                    )}
+                                </div>
+                            ))}
+                            {profile.education.length > 2 && (
+                                <p className="text-xs text-muted-foreground">+{profile.education.length - 2} more</p>
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                {/* Experience */}
+                {profile.experience && profile.experience.length > 0 && (
+                    <div>
+                        <h4 className="text-sm font-semibold flex items-center gap-2 mb-2">
+                            <Briefcase className="h-4 w-4" />
+                            Experience
+                        </h4>
+                        <div className="space-y-1">
+                            {profile.experience.slice(0, 2).map((exp, index) => (
+                                <div key={index} className="text-sm">
+                                    <p className="font-medium">{exp.position}</p>
+                                    <p className="text-muted-foreground text-xs">{exp.company}</p>
+                                    {exp.startDate && (
+                                        <p className="text-muted-foreground text-xs">
+                                            {exp.startDate} - {exp.current ? 'Present' : exp.endDate || 'N/A'}
+                                        </p>
+                                    )}
+                                </div>
+                            ))}
+                            {profile.experience.length > 2 && (
+                                <p className="text-xs text-muted-foreground">+{profile.experience.length - 2} more</p>
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                {/* Skills */}
+                {profile.skills && profile.skills.length > 0 && (
+                    <div>
+                        <h4 className="text-sm font-semibold flex items-center gap-2 mb-2">
+                            <Award className="h-4 w-4" />
+                            Skills
+                        </h4>
+                        <div className="flex flex-wrap gap-1.5">
+                            {profile.skills.slice(0, 6).map((skill) => (
+                                // @ts-ignore - Badge children prop
+                                <Badge key={skill} variant="secondary" className="text-xs">{skill}</Badge>
+                            ))}
+                            {/* @ts-ignore - Badge children prop */}
+                            {profile.skills.length > 6 && (
+                                <Badge variant="outline" className="text-xs">+{profile.skills.length - 6}</Badge>
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                {/* Interests */}
+                {profile.interests && profile.interests.length > 0 && (
+                    <div>
+                        <h4 className="text-sm font-semibold flex items-center gap-2 mb-2">
+                            <Target className="h-4 w-4" />
+                            Interests
+                        </h4>
+                        <div className="flex flex-wrap gap-1.5">
+                            {profile.interests.slice(0, 4).map((interest) => (
+                                // @ts-ignore - Badge children prop
+                                <Badge key={interest} variant="outline" className="text-xs">{interest}</Badge>
+                            ))}
+                            {/* @ts-ignore - Badge children prop */}
+                            {profile.interests.length > 4 && (
+                                <Badge variant="outline" className="text-xs">+{profile.interests.length - 4}</Badge>
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                {/* Additional Info */}
+                <div className="flex flex-wrap gap-3 text-xs text-muted-foreground pt-2 border-t">
+                    {profile.age && (
+                        <div className="flex items-center gap-1">
+                            <Calendar className="h-3 w-3" />
+                            {profile.age} years
+                        </div>
+                    )}
+                    {profile.availability && (
+                        <div className="flex items-center gap-1">
+                            <Badge variant="secondary" className="text-xs">
+                                {profile.availability === 'immediate' ? 'Available Now' : 
+                                 profile.availability === 'two_weeks' ? '2 Weeks Notice' :
+                                 profile.availability === 'one_month' ? '1 Month Notice' : 
+                                 'Exploring'}
+                            </Badge>
+                        </div>
+                    )}
+                </div>
+
+                {/* View Profile Button */}
+                <Button asChild className="w-full mt-4">
+                    <Link href={`/candidates/${profile.id}`}>View Full Profile</Link>
                 </Button>
             </CardContent>
         </Card>

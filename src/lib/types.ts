@@ -56,7 +56,7 @@ export type UserProfile = {
     location?: string;
     coordinates?: Coordinates; // Geographic coordinates for location-based search
     skills?: string[];
-    education?: string[];
+    education?: string[] | EducationDetail[]; // Support both formats
     resumeUrl?: string;
     profilePictureUrl?: string;
     interests?: string[];
@@ -65,16 +65,20 @@ export type UserProfile = {
     savedJobIds?: string[];
     // Enhanced fields
     bio?: string;
+    phone?: string;
     phoneNumber?: string;
+    website?: string;
+    jobTitle?: string;
     currentJobTitle?: string;
     currentCompany?: string;
+    experience?: WorkExperience[];
     workExperience?: WorkExperience[];
     certificates?: Certificate[];
     educationDetails?: EducationDetail[]; // Detailed education information
     videoUrls?: string[]; // Multiple video demos
     portfolioUrls?: string[];
     languages?: string[];
-    availability?: 'available' | 'not_available' | 'open_to_offers';
+    availability?: 'available' | 'not_available' | 'open_to_offers' | 'immediate' | 'two_weeks' | 'one_month' | 'exploring';
     expectedSalary?: number;
     userType?: 'job_seeker' | 'recruiter';
     companyName?: string; // For recruiters
@@ -201,12 +205,19 @@ export type Post = {
   authorJobTitle?: string;
   title: string;
   content: string;
+  type?: 'text' | 'video' | 'certificate' | 'work_experience' | 'achievement';
   imageUrl?: string;
-  category?: 'career_advice' | 'job_search' | 'interview_tips' | 'industry_news' | 'success_story' | 'other';
+  videoUrl?: string;
+  videoThumbnail?: string;
+  certificate?: Certificate;
+  workExperience?: WorkExperience;
+  category?: 'career_advice' | 'job_search' | 'interview_tips' | 'industry_news' | 'success_story' | 'work_experience' | 'certification' | 'other';
   tags?: string[];
   likes?: number;
   likedBy?: string[];
   comments?: number;
+  shares?: number;
+  visibility?: 'public' | 'connections' | 'private';
   createdAt: Timestamp | string;
   updatedAt?: Timestamp | string;
   featured?: boolean;

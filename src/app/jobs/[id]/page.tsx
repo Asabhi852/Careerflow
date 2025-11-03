@@ -99,9 +99,18 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
       const applicantProfileRef = docRef(firestore, 'users', user.uid);
       const applicantProfileSnap = await getDoc(applicantProfileRef);
       const applicantProfile = applicantProfileSnap.data();
+      
+      // Build complete applicant information
       const applicantName = applicantProfile?.firstName && applicantProfile?.lastName 
         ? `${applicantProfile.firstName} ${applicantProfile.lastName}`
         : user.displayName || user.email || 'A candidate';
+      
+      const applicantEmail = applicantProfile?.email || user.email || '';
+      const applicantPhone = applicantProfile?.phoneNumber || applicantProfile?.phone || '';
+      const applicantLocation = applicantProfile?.location || '';
+      const applicantCurrentRole = applicantProfile?.currentJobTitle || applicantProfile?.jobTitle || '';
+      const applicantSkills = applicantProfile?.skills || [];
+      const applicantResumeUrl = applicantProfile?.resumeUrl || '';
 
       // Notify the applicant (success notification)
       await notifyApplicationSuccess(firestore, user.uid, {
@@ -111,11 +120,17 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
         companyName: companyName,
       });
 
-      // Notify the job poster (new application notification)
+      // Notify the job poster (new application notification with full profile)
       if (job.posterId) {
         await notifyNewCandidateApplication(firestore, job.posterId, {
           candidateId: user.uid,
           candidateName: applicantName,
+          candidateEmail: applicantEmail,
+          candidatePhone: applicantPhone,
+          candidateLocation: applicantLocation,
+          candidateCurrentRole: applicantCurrentRole,
+          candidateSkills: applicantSkills,
+          candidateResumeUrl: applicantResumeUrl,
           jobId: job.id,
           jobTitle: job.title,
           applicationId: applicationDoc.id,

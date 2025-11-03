@@ -24,7 +24,7 @@ import { useRouter } from 'next/navigation';
 import { Textarea } from '../ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
-import { useState } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { initializeFirebase } from '@/firebase';
 
 const formSchema = (z as any).object({
@@ -56,12 +56,17 @@ const formSchema = (z as any).object({
   hiringRole: (z as any).string().optional(),
 });
 
+// Form steps
+type SignupStep = 'userType' | 'resume' | 'basic' | 'experience' | 'final';
+
 export function SignupForm() {
   const auth = useAuth();
   const firestore = useFirestore();
   const router = useRouter();
+  const [currentStep, setCurrentStep] = useState<SignupStep>('userType');
   const [resumeFile, setResumeFile] = useState<File | null>(null);
   const [isParsing, setIsParsing] = useState(false);
+  const [parsedData, setParsedData] = useState<any>(null);
   const [workExperience, setWorkExperience] = useState<Array<{
     company: string;
     position: string;
@@ -104,14 +109,37 @@ export function SignupForm() {
           title: 'File too large',
           description: 'Resume file must be less than 5MB.',
         });
-        return;
+        return false;
       }
       setResumeFile(file);
       
       // Parse resume and auto-fill form
-      await parseResumeAndFillForm(file);
+      const success = await parseResumeAndFillForm(file);
+      if (success) {
+        setCurrentStep('basic');
+      }
+      return success;
     }
+    return false;
   };
+
+  const handleResumeDrop = useCallback(async (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const file = e.dataTransfer.files?.[0];
+    if (file && file.type === 'application/pdf' || file?.name.endsWith('.docx')) {
+      const success = await handleResumeUpload({ target: { files: [file] } });
+      if (success) {
+        setCurrentStep('basic');
+      }
+    }
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+  }, []);
 
   const parseResumeAndFillForm = async (file: File) => {
     setIsParsing(true);
@@ -126,7 +154,7 @@ export function SignupForm() {
           description: 'Could not extract text from the resume. Please fill the form manually.',
         });
         setIsParsing(false);
-        return;
+        return false;
       }
 
       // Call API route to parse resume
@@ -146,6 +174,9 @@ export function SignupForm() {
       const result = await response.json();
       const parsedData = result.data;
       
+      // Store parsed data for multi-step form
+      setParsedData(parsedData);
+      
       // Auto-fill form fields with parsed data
       if (parsedData.personalInfo) {
         if (parsedData.personalInfo.firstName) {
@@ -158,7 +189,7 @@ export function SignupForm() {
           form.setValue('email', parsedData.personalInfo.email);
         }
         if (parsedData.personalInfo.phoneNumber) {
-          // Store phone number if needed (add to form schema)
+          form.setValue('phone', parsedData.personalInfo.phoneNumber);
         }
         if (parsedData.personalInfo.location) {
           form.setValue('location', parsedData.personalInfo.location);
@@ -174,6 +205,9 @@ export function SignupForm() {
         }
         if (parsedData.professionalSummary.currentCompany) {
           form.setValue('currentCompany', parsedData.professionalSummary.currentCompany);
+        }
+        if (parsedData.professionalSummary.bio) {
+          form.setValue('summary', parsedData.professionalSummary.bio);
         }
       }
 
@@ -194,6 +228,11 @@ export function SignupForm() {
           .map(edu => `${edu.degree} in ${edu.field} from ${edu.institution}${edu.graduationYear ? ` (${edu.graduationYear})` : ''}`)
           .join('\n');
         form.setValue('education', educationText);
+      }
+      
+      // Fill work experience if available
+      if (parsedData.workExperience && parsedData.workExperience.length > 0) {
+        setWorkExperience(parsedData.workExperience);
       }
 
       // Fill interests
@@ -292,26 +331,6 @@ export function SignupForm() {
     });
   };
 
-  const addWorkExperience = () => {
-    setWorkExperience([...workExperience, {
-      company: '',
-      position: '',
-      startDate: '',
-      endDate: '',
-      description: '',
-    }]);
-  };
-
-  const removeWorkExperience = (index: number) => {
-    setWorkExperience(workExperience.filter((_: any, i: any) => i !== index));
-  };
-
-  const updateWorkExperience = (index: number, field: string, value: string) => {
-    const updated = [...workExperience];
-    updated[index] = { ...updated[index], [field]: value };
-    setWorkExperience(updated);
-  };
-
   async function onSubmit(values: any) {
     if (!auth || !firestore) return;
 
@@ -386,46 +405,154 @@ export function SignupForm() {
         });
       }
     }
-  }
+  };
 
-  return (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-        {/* User Type Selection */}
-        <FormField
-          control={form.control}
-          name="userType"
-          render={({ field }: any) => (
-            <FormItem>
-              <FormLabel>I am a</FormLabel>
-              <Select onValueChange={field.onChange} defaultValue={field.value}>
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select your role" />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  <SelectItem value="job_seeker">Job Seeker</SelectItem>
-                  <SelectItem value="recruiter">Recruiter</SelectItem>
-                </SelectContent>
-              </Select>
-              <FormMessage />
-            </FormItem>
-          )}
+  const addWorkExperience = () => {
+    setWorkExperience([...workExperience, {
+      company: '',
+      position: '',
+      startDate: '',
+      endDate: '',
+      description: '',
+    }]);
+  };
+
+  const removeWorkExperience = (index: number) => {
+    setWorkExperience(workExperience.filter((_: any, i: any) => i !== index));
+  };
+
+  const updateWorkExperience = (index: number, field: string, value: string) => {
+    const updated = [...workExperience];
+    updated[index] = { ...updated[index], [field]: value };
+    setWorkExperience(updated);
+  };
+
+  const renderUserTypeStep = () => (
+    <div className="space-y-6">
+      <div className="text-center">
+        <h2 className="text-2xl font-bold mb-2">Welcome to CareerFlow</h2>
+        <p className="text-muted-foreground">Let's get started by selecting your account type</p>
+      </div>
+      
+      <FormField
+        control={form.control}
+        name="userType"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>I am a</FormLabel>
+            <Select onValueChange={(value) => {
+              field.onChange(value);
+              // Auto-advance to next step based on user type
+              setTimeout(() => {
+                if (value === 'job_seeker') {
+                  setCurrentStep('resume');
+                } else {
+                  setCurrentStep('basic');
+                }
+              }, 500);
+            }} defaultValue={field.value}>
+              <FormControl>
+                <SelectTrigger className="h-16 text-lg">
+                  <SelectValue placeholder="Select your account type" />
+                </SelectTrigger>
+              </FormControl>
+              <SelectContent>
+                <SelectItem value="job_seeker" className="cursor-pointer py-4">
+                  <div className="flex flex-col">
+                    <span className="font-semibold">Job Seeker</span>
+                    <span className="text-sm text-muted-foreground">Looking for opportunities</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="recruiter" className="cursor-pointer py-4">
+                  <div className="flex flex-col">
+                    <span className="font-semibold">Recruiter</span>
+                    <span className="text-sm text-muted-foreground">Hiring talented professionals</span>
+                  </div>
+                </SelectItem>
+              </SelectContent>
+            </Select>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+    </div>
+  );
+
+  const renderResumeStep = () => (
+    <div className="space-y-6">
+      <div className="text-center">
+        <h2 className="text-2xl font-bold mb-2">Upload Your Resume</h2>
+        <p className="text-muted-foreground">We'll use your resume to pre-fill your profile information</p>
+      </div>
+      
+      <div 
+        className="border-2 border-dashed rounded-lg p-12 text-center cursor-pointer hover:bg-muted/50 transition-colors"
+        onDrop={handleResumeDrop}
+        onDragOver={handleDragOver}
+        onClick={() => document.getElementById('resume-upload')?.click()}
+      >
+        <div className="flex flex-col items-center justify-center space-y-4">
+          <Upload className="h-12 w-12 text-muted-foreground" />
+          <div>
+            <p className="font-medium">Drag & drop your resume here</p>
+            <p className="text-sm text-muted-foreground">or click to browse files</p>
+            <p className="text-xs text-muted-foreground mt-2">Supports PDF and DOCX (max 5MB)</p>
+          </div>
+        </div>
+        <input
+          id="resume-upload"
+          type="file"
+          accept=".pdf,.docx"
+          className="hidden"
+          onChange={handleResumeUpload}
         />
+      </div>
+      
+      <div className="text-center">
+        <Button 
+          variant="outline" 
+          onClick={() => setCurrentStep('basic')}
+          disabled={isParsing}
+        >
+          {isParsing ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Parsing resume...
+            </>
+          ) : (
+            'Skip and fill manually'
+          )}
+        </Button>
+      </div>
+    </div>
+  );
 
-        {/* Basic Information */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Basic Information</CardTitle>
-            <CardDescription>Your personal details</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+  const renderFormSteps = () => {
+    switch (currentStep) {
+      case 'userType':
+        return renderUserTypeStep();
+      
+      case 'resume':
+        // Only show resume step for job seekers
+        if (userType === 'job_seeker') {
+          return renderResumeStep();
+        }
+        // For recruiters, skip to basic info
+        setCurrentStep('basic');
+        return null;
+      case 'basic':
+        return (
+          <div className="space-y-6">
+            <div className="text-center">
+              <h2 className="text-2xl font-bold mb-2">Basic Information</h2>
+              <p className="text-muted-foreground">We've pre-filled some details from your resume</p>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <FormField
                 control={form.control}
                 name="firstName"
-                render={({ field }: any) => (
+                render={({ field }) => (
                   <FormItem>
                     <FormLabel>First Name</FormLabel>
                     <FormControl>
@@ -438,7 +565,7 @@ export function SignupForm() {
               <FormField
                 control={form.control}
                 name="lastName"
-                render={({ field }: any) => (
+                render={({ field }) => (
                   <FormItem>
                     <FormLabel>Last Name</FormLabel>
                     <FormControl>
@@ -449,384 +576,367 @@ export function SignupForm() {
                 )}
               />
             </div>
+            
             <FormField
               control={form.control}
               name="email"
-              render={({ field }: any) => (
+              render={({ field }) => (
                 <FormItem>
                   <FormLabel>Email</FormLabel>
                   <FormControl>
-                    <Input placeholder="name@example.com" {...field} />
+                    <Input type="email" placeholder="john@example.com" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
+            
             <FormField
               control={form.control}
               name="password"
-              render={({ field }: any) => (
+              render={({ field }) => (
                 <FormItem>
                   <FormLabel>Password</FormLabel>
                   <FormControl>
-                    <Input type="password" placeholder="••••••••" {...field} />
+                    <Input type="password" placeholder="Create a strong password" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="location"
-                render={({ field }: any) => (
-                  <FormItem>
-                    <FormLabel>Location</FormLabel>
-                    <FormControl>
-                      <Input placeholder="e.g. San Francisco, CA" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="age"
-                render={({ field }: any) => (
-                  <FormItem>
-                    <FormLabel>Age</FormLabel>
-                    <FormControl>
-                      <Input type="number" placeholder="e.g. 25" {...field} value={field.value ?? ''} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+            
+            <div className="flex justify-between pt-4">
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  if (userType === 'job_seeker') {
+                    setCurrentStep('resume');
+                  } else {
+                    setCurrentStep('userType');
+                  }
+                }}
+              >
+                Back
+              </Button>
+              <Button 
+                onClick={() => {
+                  if (userType === 'job_seeker') {
+                    setCurrentStep('experience');
+                  } else {
+                    setCurrentStep('final');
+                  }
+                }}
+              >
+                Next: {userType === 'job_seeker' ? 'Experience' : 'Review'}
+              </Button>
             </div>
-
+          </div>
+        );
+      
+      case 'experience':
+        return (
+          <div className="space-y-6">
+            <div className="text-center">
+              <h2 className="text-2xl font-bold mb-2">Your Experience</h2>
+              <p className="text-muted-foreground">Review and edit your work experience</p>
+            </div>
+            
             <FormField
               control={form.control}
-              name="interests"
-              render={({ field }: any) => (
+              name="currentJobTitle"
+              render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Interests</FormLabel>
+                  <FormLabel>Current Job Title</FormLabel>
                   <FormControl>
-                    <Textarea
-                      placeholder="Enter your interests, separated by commas"
-                      className="resize-none"
-                      {...field}
-                    />
+                    <Input placeholder="e.g. Senior Software Engineer" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            
+            <FormField
+              control={form.control}
+              name="currentCompany"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Current Company</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Company name" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            
+            <FormField
+              control={form.control}
+              name="skills"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Skills</FormLabel>
+                  <FormControl>
+                    <Input placeholder="e.g. JavaScript, React, Node.js" {...field} />
                   </FormControl>
                   <FormDescription>
-                    List a few of your interests like "Web Development, Hiking, Photography".
+                    Add your top skills separated by commas
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
             />
-          </CardContent>
-        </Card>
-
-        {/* Job Seeker Specific Fields */}
-        {userType === 'job_seeker' && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Professional Information</CardTitle>
-              <CardDescription>Your career details and experience</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {/* Resume Upload */}
-              <div className="space-y-2">
-                <FormLabel>Resume</FormLabel>
-                <div className="flex items-center space-x-2">
-                  <Input
-                    type="file"
-                    accept=".pdf,.doc,.docx,.txt"
-                    onChange={handleResumeUpload}
-                    className="hidden"
-                    id="resume-upload"
-                    disabled={isParsing}
-                  />
-                  <label
-                    htmlFor="resume-upload"
-                    className={`flex items-center space-x-2 px-4 py-2 border border-dashed border-gray-300 rounded-md cursor-pointer hover:bg-gray-50 flex-1 ${isParsing ? 'opacity-50 cursor-not-allowed' : ''}`}
-                  >
-                    {isParsing ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        <span>Parsing resume...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Upload className="h-4 w-4" />
-                        <span>{resumeFile ? resumeFile.name : 'Upload Resume'}</span>
-                      </>
-                    )}
-                  </label>
-                  {resumeFile && !isParsing && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setResumeFile(null)}
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  )}
+            
+            <FormField
+              control={form.control}
+              name="education"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Education</FormLabel>
+                  <FormControl>
+                    <Textarea 
+                      placeholder="e.g. B.Tech in Computer Science from XYZ University (2020)" 
+                      {...field} 
+                      rows={3}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            
+            <div className="flex justify-between pt-4">
+              <Button 
+                variant="outline" 
+                onClick={() => setCurrentStep('basic')}
+              >
+                Back
+              </Button>
+              <Button 
+                onClick={() => setCurrentStep('final')}
+              >
+                Next: Review
+              </Button>
+            </div>
+          </div>
+        );
+      
+      case 'final':
+        return (
+          <div className="space-y-6">
+            <div className="text-center">
+              <h2 className="text-2xl font-bold mb-2">Review Your Profile</h2>
+              <p className="text-muted-foreground">Make sure everything looks good before you continue</p>
+            </div>
+            
+            <div className="space-y-4">
+              <div className="border rounded-lg p-4">
+                <h3 className="font-medium">Basic Information</h3>
+                <div className="mt-2 space-y-2 text-sm">
+                  <p><span className="text-muted-foreground">Account Type:</span> <span className="capitalize">{userType === 'job_seeker' ? 'Job Seeker' : 'Recruiter'}</span></p>
+                  <p><span className="text-muted-foreground">Name:</span> {form.watch('firstName')} {form.watch('lastName')}</p>
+                  <p><span className="text-muted-foreground">Email:</span> {form.watch('email')}</p>
                 </div>
-                <FormDescription>
-                  Upload your resume (PDF, DOC, DOCX, TXT) - Max 5MB. Your information will be automatically filled.
-                </FormDescription>
               </div>
 
-              {/* Current Position */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="currentJobTitle"
-                  render={({ field }: any) => (
-                    <FormItem>
-                      <FormLabel>Current Job Title</FormLabel>
-                      <FormControl>
-                        <Input placeholder="e.g. Software Engineer" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
+              {/* Job Seeker Specific Info */}
+              {userType === 'job_seeker' && (
+                <>
+                  {(form.watch('currentJobTitle') || form.watch('currentCompany')) && (
+                    <div className="border rounded-lg p-4">
+                      <h3 className="font-medium">Professional Details</h3>
+                      <div className="mt-2 space-y-2 text-sm">
+                        {form.watch('currentJobTitle') && (
+                          <p><span className="text-muted-foreground">Current Role:</span> {form.watch('currentJobTitle')}</p>
+                        )}
+                        {form.watch('currentCompany') && (
+                          <p><span className="text-muted-foreground">Company:</span> {form.watch('currentCompany')}</p>
+                        )}
+                      </div>
+                    </div>
                   )}
-                />
-                <FormField
-                  control={form.control}
-                  name="currentCompany"
-                  render={({ field }: any) => (
-                    <FormItem>
-                      <FormLabel>Current Company</FormLabel>
-                      <FormControl>
-                        <Input placeholder="e.g. Google" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
+                  
+                  {form.watch('skills') && (
+                    <div className="border rounded-lg p-4">
+                      <h3 className="font-medium">Skills</h3>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {form.watch('skills').split(',').map((skill: string, index: number) => (
+                          <span key={index} className="bg-muted px-2 py-1 rounded-md text-sm">
+                            {skill.trim()}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
                   )}
-                />
-              </div>
+                </>
+              )}
 
-              {/* Skills */}
-              <FormField
-                control={form.control}
-                name="skills"
-                render={({ field }: any) => (
-                  <FormItem>
-                    <FormLabel>Skills</FormLabel>
-                    <FormControl>
-                      <Textarea
-                        placeholder="Enter your skills, separated by commas"
-                        className="resize-none"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormDescription>
-                      List your technical and soft skills like "JavaScript, React, Leadership".
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              {/* Education */}
-              <FormField
-                control={form.control}
-                name="education"
-                render={({ field }: any) => (
-                  <FormItem>
-                    <FormLabel>Education</FormLabel>
-                    <FormControl>
-                      <Textarea
-                        placeholder="Enter your educational background"
-                        className="resize-none"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormDescription>
-                      Include your degree, university, and graduation year.
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              {/* Work Experience */}
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <FormLabel>Work Experience</FormLabel>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={addWorkExperience}
-                  >
-                    Add Experience
-                  </Button>
-                </div>
-                {workExperience.map((exp: any, index: any) => (
-                  <Card key={index}>
-                    <CardContent className="pt-4">
-                      <div className="flex justify-between items-start mb-4">
-                        <h4 className="font-medium">Experience {index + 1}</h4>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => removeWorkExperience(index)}
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div>
-                          <FormLabel>Company</FormLabel>
-                          <Input
-                            placeholder="Company name"
-                            value={exp.company}
-                            onChange={(e: any) => updateWorkExperience(index, 'company', e.target.value)}
-                          />
-                        </div>
-                        <div>
-                          <FormLabel>Position</FormLabel>
-                          <Input
-                            placeholder="Job title"
-                            value={exp.position}
-                            onChange={(e: any) => updateWorkExperience(index, 'position', e.target.value)}
-                          />
-                        </div>
-                        <div>
-                          <FormLabel>Start Date</FormLabel>
-                          <Input
-                            type="date"
-                            value={exp.startDate}
-                            onChange={(e: any) => updateWorkExperience(index, 'startDate', e.target.value)}
-                          />
-                        </div>
-                        <div>
-                          <FormLabel>End Date</FormLabel>
-                          <Input
-                            type="date"
-                            placeholder="Leave empty if current"
-                            value={exp.endDate}
-                            onChange={(e: any) => updateWorkExperience(index, 'endDate', e.target.value)}
-                          />
-                        </div>
-                      </div>
-                      <div className="mt-4">
-                        <FormLabel>Description</FormLabel>
-                        <Textarea
-                          placeholder="Describe your role and achievements"
-                          value={exp.description}
-                          onChange={(e: any) => updateWorkExperience(index, 'description', e.target.value)}
-                          className="resize-none"
-                        />
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Recruiter Specific Fields */}
-        {userType === 'recruiter' && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Company Information</CardTitle>
-              <CardDescription>Your company and hiring details</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <FormField
-                control={form.control}
-                name="companyName"
-                render={({ field }: any) => (
-                  <FormItem>
-                    <FormLabel>Company Name</FormLabel>
-                    <FormControl>
-                      <Input placeholder="e.g. Tech Corp" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="companySize"
-                  render={({ field }: any) => (
-                    <FormItem>
-                      <FormLabel>Company Size</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+              {/* Recruiter Specific Info */}
+              {userType === 'recruiter' && (
+                <div className="space-y-4">
+                  <FormField
+                    control={form.control}
+                    name="companyName"
+                    render={({ field }: any) => (
+                      <FormItem>
+                        <FormLabel>Company Name</FormLabel>
                         <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select company size" />
-                          </SelectTrigger>
+                          <Input placeholder="e.g. Tech Corp" {...field} />
                         </FormControl>
-                        <SelectContent>
-                          <SelectItem value="1-10">1-10 employees</SelectItem>
-                          <SelectItem value="11-50">11-50 employees</SelectItem>
-                          <SelectItem value="51-200">51-200 employees</SelectItem>
-                          <SelectItem value="201-500">201-500 employees</SelectItem>
-                          <SelectItem value="501-1000">501-1000 employees</SelectItem>
-                          <SelectItem value="1000+">1000+ employees</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="industry"
-                  render={({ field }: any) => (
-                    <FormItem>
-                      <FormLabel>Industry</FormLabel>
-                      <FormControl>
-                        <Input placeholder="e.g. Technology, Healthcare" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
 
-              <FormField
-                control={form.control}
-                name="hiringRole"
-                render={({ field }: any) => (
-                  <FormItem>
-                    <FormLabel>Your Role in Hiring</FormLabel>
-                    <FormControl>
-                      <Input placeholder="e.g. HR Manager, Talent Acquisition" {...field} />
-                    </FormControl>
-                    <FormDescription>
-                      Describe your role in the hiring process.
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="companySize"
+                      render={({ field }: any) => (
+                        <FormItem>
+                          <FormLabel>Company Size</FormLabel>
+                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select company size" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="1-10">1-10 employees</SelectItem>
+                              <SelectItem value="11-50">11-50 employees</SelectItem>
+                              <SelectItem value="51-200">51-200 employees</SelectItem>
+                              <SelectItem value="201-500">201-500 employees</SelectItem>
+                              <SelectItem value="501-1000">501-1000 employees</SelectItem>
+                              <SelectItem value="1000+">1000+ employees</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="industry"
+                      render={({ field }: any) => (
+                        <FormItem>
+                          <FormLabel>Industry</FormLabel>
+                          <FormControl>
+                            <Input placeholder="e.g. Technology, Healthcare" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  <FormField
+                    control={form.control}
+                    name="hiringRole"
+                    render={({ field }: any) => (
+                      <FormItem>
+                        <FormLabel>Your Role in Hiring</FormLabel>
+                        <FormControl>
+                          <Input placeholder="e.g. HR Manager, Talent Acquisition" {...field} />
+                        </FormControl>
+                        <FormDescription>
+                          Describe your role in the hiring process.
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              )}
+
+            </div>
+            
+            <div className="flex justify-between pt-4">
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  if (userType === 'job_seeker') {
+                    setCurrentStep('experience');
+                  } else {
+                    setCurrentStep('basic');
+                  }
+                }}
+              >
+                Back
+              </Button>
+              <Button type="submit" disabled={form.formState.isSubmitting}>
+                {form.formState.isSubmitting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Creating account...
+                  </>
+                ) : (
+                  'Create Account'
                 )}
-              />
-            </CardContent>
-          </Card>
-        )}
+              </Button>
+            </div>
+          </div>
+        );
+      
+      default:
+        return null;
+    }
+  };
 
-        <Button
-          type="submit"
-          className="w-full"
-          disabled={form.formState.isSubmitting}
-        >
-          {form.formState.isSubmitting && (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          )}
-          Create Account
-        </Button>
-      </form>
-    </Form>
+  const getSteps = () => {
+    if (userType === 'job_seeker') {
+      return ['userType', 'resume', 'basic', 'experience', 'final'];
+    }
+    return ['userType', 'basic', 'final'];
+  };
+
+  const getStepLabel = (step: string) => {
+    const labels: { [key: string]: string } = {
+      userType: 'Type',
+      resume: 'Resume',
+      basic: 'Basic',
+      experience: 'Experience',
+      final: 'Review'
+    };
+    return labels[step] || step;
+  };
+
+  return (
+    <div className="container mx-auto px-4 py-8">
+      <div className="max-w-2xl mx-auto mb-8">
+        <div className="flex justify-between items-center">
+          {getSteps().map((step, index) => (
+            <div key={step} className="flex flex-col items-center flex-1">
+              <div 
+                className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                  currentStep === step 
+                    ? 'bg-primary text-primary-foreground' 
+                    : getSteps().indexOf(currentStep) > index
+                      ? 'bg-green-500 text-white'
+                      : 'bg-muted text-muted-foreground'
+                }`}
+              >
+                {getSteps().indexOf(currentStep) > index ? '✓' : index + 1}
+              </div>
+              <span className="text-xs mt-2 text-center">
+                {getStepLabel(step)}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+      
+      <Card className="max-w-2xl mx-auto">
+        <CardHeader>
+          <CardTitle>Create an account</CardTitle>
+          <CardDescription>Enter your information to create an account</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+              {renderFormSteps()}
+            </form>
+          </Form>
+        </CardContent>
+      </Card>
+    </div>
   );
 }

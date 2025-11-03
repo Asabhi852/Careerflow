@@ -51,6 +51,7 @@ export async function notifyNewJobPosted(
 
 /**
  * Notify recruiter when a new candidate applies to their job
+ * Includes full candidate profile information for easy access
  */
 export async function notifyNewCandidateApplication(
   firestore: Firestore,
@@ -61,20 +62,47 @@ export async function notifyNewCandidateApplication(
     jobId: string;
     jobTitle: string;
     applicationId: string;
+    candidateEmail?: string;
+    candidatePhone?: string;
+    candidateLocation?: string;
+    candidateCurrentRole?: string;
+    candidateSkills?: string[];
+    candidateResumeUrl?: string;
   }
 ): Promise<void> {
+  // Build detailed message with candidate information
+  const messageDetails = [
+    `${applicationData.candidateName} applied for ${applicationData.jobTitle}`,
+  ];
+  
+  if (applicationData.candidateCurrentRole) {
+    messageDetails.push(`Current Role: ${applicationData.candidateCurrentRole}`);
+  }
+  
+  if (applicationData.candidateLocation) {
+    messageDetails.push(`Location: ${applicationData.candidateLocation}`);
+  }
+
   await createNotification(firestore, posterId, {
     userId: posterId,
-    title: 'New Application',
-    message: `${applicationData.candidateName} applied for ${applicationData.jobTitle}`,
+    title: '🎯 New Application Received!',
+    message: messageDetails.join(' • '),
     type: 'application',
     data: {
       candidateId: applicationData.candidateId,
       applicantId: applicationData.candidateId,
+      candidateName: applicationData.candidateName,
+      candidateEmail: applicationData.candidateEmail,
+      candidatePhone: applicationData.candidatePhone,
+      candidateLocation: applicationData.candidateLocation,
+      candidateCurrentRole: applicationData.candidateCurrentRole,
+      candidateSkills: applicationData.candidateSkills,
+      candidateResumeUrl: applicationData.candidateResumeUrl,
       jobId: applicationData.jobId,
       applicationId: applicationData.applicationId,
       jobTitle: applicationData.jobTitle,
       applicationStatus: 'pending',
+      viewProfileUrl: `/candidates/${applicationData.candidateId}`,
     },
   });
 }

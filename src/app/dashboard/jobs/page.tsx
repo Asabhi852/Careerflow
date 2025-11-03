@@ -40,22 +40,37 @@ export default function JobsPage() {
     enabled: activeTab !== 'internal'
   });
 
-  // Combine and filter jobs based on active tab
-  const displayedJobs = useMemo(() => {
+  // Separate user's jobs and other jobs, then combine based on active tab
+  const { myJobs, displayedJobs } = useMemo(() => {
     const internal = (internalJobs || []).map(job => ({ ...job, source: 'internal' as const }));
+    
+    let jobsToDisplay: JobPosting[] = [];
     
     switch (activeTab) {
       case 'internal':
-        return internal;
+        jobsToDisplay = internal;
+        break;
       case 'linkedin':
-        return externalJobs.filter(job => job.source === 'linkedin');
+        jobsToDisplay = externalJobs.filter(job => job.source === 'linkedin');
+        break;
       case 'naukri':
-        return externalJobs.filter(job => job.source === 'naukri');
+        jobsToDisplay = externalJobs.filter(job => job.source === 'naukri');
+        break;
       case 'all':
       default:
-        return [...internal, ...externalJobs];
+        jobsToDisplay = [...internal, ...externalJobs];
     }
-  }, [internalJobs, externalJobs, activeTab]);
+    
+    // Separate jobs posted by current user
+    const myJobs = user ? jobsToDisplay.filter(job => job.posterId === user.uid) : [];
+    const otherJobs = user ? jobsToDisplay.filter(job => job.posterId !== user.uid) : jobsToDisplay;
+    
+    // Put user's jobs first
+    return {
+      myJobs,
+      displayedJobs: [...myJobs, ...otherJobs]
+    };
+  }, [internalJobs, externalJobs, activeTab, user]);
 
   const isLoading = activeTab === 'internal' ? isLoadingInternal : isLoadingInternal || isLoadingExternal;
 
@@ -152,9 +167,30 @@ export default function JobsPage() {
                 </div>
               )}
               
+              {/* Show user's jobs first in a highlighted section */}
+              {!isLoading && myJobs.length > 0 && (
+                <div className="mb-8">
+                  <div className="flex items-center gap-2 mb-4">
+                    <h3 className="text-lg font-semibold">My Posted Jobs</h3>
+                    <Badge className="bg-primary">{myJobs.length}</Badge>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 p-4 bg-primary/5 rounded-lg border-2 border-primary/20">
+                    {myJobs.map((job) => (
+                      <JobCard key={job.id} job={job} />
+                    ))}
+                  </div>
+                  {displayedJobs.length > myJobs.length && (
+                    <div className="mt-6">
+                      <h3 className="text-lg font-semibold mb-4">Other Jobs</h3>
+                    </div>
+                  )}
+                </div>
+              )}
+              
+              {/* Show other jobs or all jobs if user hasn't posted any */}
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                 {isLoading && Array.from({ length: 6 }).map((_, i) => <JobCardSkeleton key={i} />)}
-                {displayedJobs.map((job) => (
+                {!isLoading && displayedJobs.filter(job => job.posterId !== user?.uid).map((job) => (
                   <JobCard key={job.id} job={job} />
                 ))}
               </div>

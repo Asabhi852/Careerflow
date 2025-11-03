@@ -53,19 +53,20 @@ export default function JobsPage() {
   });
 
   // Cache geocoded coordinates for external jobs to enable distance sorting
-  const [externalCoords, setExternalCoords] = useState<Record<string, { lat: number; lng: number }>>({});
+  const [externalCoords, setExternalCoords] = useState<Record<string, { latitude: number; longitude: number }>>({});
 
   useEffect(() => {
     if (!sortByLocation || !externalJobs || !coordinates) return;
     let cancelled = false;
     const run = async () => {
-      const updates: Record<string, { lat: number; lng: number }> = {};
+      const updates: Record<string, { latitude: number; longitude: number }> = {};
       for (const job of externalJobs) {
         if (!job.location) continue;
         if (externalCoords[job.id || '']) continue;
         const coords = await geocodeLocation(job.location);
         if (cancelled) return;
         if (coords && job.id) {
+          // Store coordinates directly (already in Coordinates format)
           updates[job.id] = coords;
         }
       }
@@ -114,8 +115,8 @@ export default function JobsPage() {
     geocodeJobs();
   }, [internalJobs, sortByLocation]);
 
-  // Combine all jobs with optional location-based sorting
-  const allJobs = useMemo(() => {
+  // Separate user's jobs and other jobs
+  const { myJobs, otherJobs } = useMemo(() => {
     const internal = internalJobs || [];
     // Enrich external jobs with coordinates if available
     const external = (externalJobs || []).map(j => (
@@ -123,24 +124,39 @@ export default function JobsPage() {
     ));
     let combined = [...internal, ...external];
     
-    if (sortByLocation && coordinates) {
-      // Sort by distance from user's location
-      combined = sortByDistance(
-        combined,
-        coordinates,
-        (job) => job.coordinates || null
-      );
-    } else {
-      // Default sort by date
-      combined = combined.sort((a, b) => {
-        const dateA = new Date(a.postedDate || 0).getTime();
-        const dateB = new Date(b.postedDate || 0).getTime();
-        return dateB - dateA;
-      });
-    }
+    // Separate jobs posted by current user
+    const myJobs = user ? combined.filter(job => job.posterId === user.uid) : [];
+    const otherJobs = user ? combined.filter(job => job.posterId !== user.uid) : combined;
     
-    return combined;
-  }, [internalJobs, externalJobs, sortByLocation, coordinates]);
+    // Sort function
+    const sortJobs = (jobs: JobPosting[]) => {
+      if (sortByLocation && coordinates) {
+        // Sort by distance from user's location
+        return sortByDistance(
+          jobs,
+          coordinates,
+          (job) => job.coordinates || null
+        );
+      } else {
+        // Default sort by date
+        return jobs.sort((a, b) => {
+          const dateA = new Date(a.postedDate || 0).getTime();
+          const dateB = new Date(b.postedDate || 0).getTime();
+          return dateB - dateA;
+        });
+      }
+    };
+    
+    return {
+      myJobs: sortJobs([...myJobs]),
+      otherJobs: sortJobs([...otherJobs])
+    };
+  }, [internalJobs, externalJobs, sortByLocation, coordinates, user]);
+
+  // Combine all jobs with user's jobs first
+  const allJobs = useMemo(() => {
+    return [...myJobs, ...otherJobs];
+  }, [myJobs, otherJobs]);
 
   const isLoading = isLoadingInternal || isLoadingExternal;
 
@@ -170,22 +186,66 @@ export default function JobsPage() {
     });
   };
 
-  const renderJobGrid = (jobs: JobPosting[] | undefined, loading: boolean) => (
-    <>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {loading && Array.from({ length: 6 }).map((_, i) => <JobCardSkeleton key={i} />)}
-        {!loading && jobs?.map((job) => (
-          <JobCard key={job.id} job={job} />
-        ))}
-      </div>
-      {jobs && jobs.length === 0 && !loading && (
-        <div className="text-center py-20 border-2 border-dashed rounded-lg">
+  const renderJobGrid = (jobs: JobPosting[] | undefined, loading: boolean, showMyJobsSection: boolean = false) => {
+    if (loading) {
+      return (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {Array.from({ length: 6 }).map((_, i) => <JobCardSkeleton key={i} />)}
+        </div>
+      );
+    }
+
+    if (showMyJobsSection && myJobs.length > 0) {
+      return (
+        <>
+          {/* My Jobs Section */}
+          <div className="mb-8">
+            <div className="flex items-center gap-2 mb-4">
+              <h2 className="text-2xl font-bold">My Posted Jobs</h2>
+              <Badge className="bg-primary">{myJobs.length}</Badge>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 p-4 bg-muted/30 rounded-lg border-2 border-primary/20">
+              {myJobs.map((job) => (
+                <JobCard key={job.id} job={job} />
+              ))}
+            </div>
+          </div>
+
+          {/* Other Jobs Section */}
+          {otherJobs.length > 0 && (
+            <>
+              <div className="flex items-center gap-2 mb-4">
+                <h2 className="text-2xl font-bold">All Jobs</h2>
+                <Badge variant="secondary">{otherJobs.length}</Badge>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {otherJobs.map((job) => (
+                  <JobCard key={job.id} job={job} />
+                ))}
+              </div>
+            </>
+          )}
+        </>
+      );
+    }
+
+    // Default rendering for tabs without my jobs section
+    return (
+      <>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {jobs?.map((job) => (
+            <JobCard key={job.id} job={job} />
+          ))}
+        </div>
+        {jobs && jobs.length === 0 && (
+          <div className="text-center py-20 border-2 border-dashed rounded-lg">
             <h3 className="text-xl font-semibold">No jobs found.</h3>
             <p className="text-muted-foreground mt-2">Check back later for new opportunities!</p>
-        </div>
-      )}
-    </>
-  );
+          </div>
+        )}
+      </>
+    );
+  };
 
   return (
     <div className="flex flex-col min-h-screen">
@@ -222,7 +282,12 @@ export default function JobsPage() {
           )}
 
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="grid w-full max-w-md mx-auto grid-cols-4 mb-8">
+            <TabsList className={`grid w-full max-w-${user && myJobs.length > 0 ? '3xl' : 'md'} mx-auto grid-cols-${user && myJobs.length > 0 ? '5' : '4'} mb-8`}>
+              {user && myJobs.length > 0 && (
+                <TabsTrigger value="my-jobs" className="font-semibold">
+                  My Jobs ({myJobs.length})
+                </TabsTrigger>
+              )}
               <TabsTrigger value="all">
                 All ({allJobs.length})
               </TabsTrigger>
@@ -237,8 +302,14 @@ export default function JobsPage() {
               </TabsTrigger>
             </TabsList>
             
+            {user && myJobs.length > 0 && (
+              <TabsContent value="my-jobs">
+                {renderJobGrid(myJobs, isLoading, false)}
+              </TabsContent>
+            )}
+            
             <TabsContent value="all">
-              {renderJobGrid(allJobs, isLoading)}
+              {renderJobGrid(allJobs, isLoading, user && myJobs.length > 0)}
             </TabsContent>
             
             <TabsContent value="linkedin">

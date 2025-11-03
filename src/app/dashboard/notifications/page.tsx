@@ -4,16 +4,17 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Bell, Briefcase, MessageSquare, UserCheck, CheckCircle2, FileText, Building2, MapPin, DollarSign } from 'lucide-react';
+import { Bell, Briefcase, MessageSquare, UserCheck, CheckCircle2, FileText, Building2, MapPin, DollarSign, Check } from 'lucide-react';
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, query, orderBy } from 'firebase/firestore';
 import type { Notification } from '@/lib/types';
 import { formatDistanceToNow } from 'date-fns';
 import { Skeleton } from '@/components/ui/skeleton';
-import { getNotificationIcon, getNotificationColor, markNotificationAsRead } from '@/lib/notifications';
+import { getNotificationIcon, getNotificationColor, markNotificationAsRead, markAllNotificationsAsRead } from '@/lib/notifications';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import { toast } from '@/hooks/use-toast';
 
 const iconMap: { [key: string]: React.ReactNode } = {
   'profile_view': <UserCheck className="h-5 w-5" />,
@@ -40,10 +41,52 @@ export default function NotificationsPage() {
   }, [user, firestore, isClient]);
 
   const { data: notifications, isLoading } = useCollection<Notification>(notificationsQuery);
+  const [isMarkingAllRead, setIsMarkingAllRead] = useState(false);
+
+  // Auto-mark notifications as read when user views the page
+  useEffect(() => {
+    if (!user || !firestore || !notifications || !isClient) return;
+    
+    const unreadNotifications = notifications.filter(n => !n.read && n.id);
+    if (unreadNotifications.length > 0) {
+      // Wait a bit before marking as read (user should see the notifications first)
+      const timer = setTimeout(async () => {
+        try {
+          await markAllNotificationsAsRead(firestore, user.uid, notifications);
+          console.log('Notifications marked as read automatically');
+        } catch (error) {
+          console.error('Error auto-marking notifications:', error);
+        }
+      }, 2000); // 2 seconds delay
+
+      return () => clearTimeout(timer);
+    }
+  }, [notifications, user, firestore, isClient]);
 
   const formatDate = (timestamp: any) => {
     if (!timestamp) return 'Just now';
     return formatDistanceToNow(timestamp.toDate(), { addSuffix: true });
+  }
+
+  const handleMarkAllAsRead = async () => {
+    if (!user || !firestore || !notifications) return;
+    
+    setIsMarkingAllRead(true);
+    try {
+      await markAllNotificationsAsRead(firestore, user.uid, notifications);
+      toast({
+        title: 'All notifications marked as read',
+        description: 'Your notification badge has been cleared.',
+      });
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Failed to mark notifications as read. Please try again.',
+      });
+    } finally {
+      setIsMarkingAllRead(false);
+    }
   }
 
   const handleNotificationClick = async (notification: Notification) => {
@@ -72,25 +115,97 @@ export default function NotificationsPage() {
     if (!data) return null;
 
     return (
-      <div className="mt-2 space-y-1 text-xs text-muted-foreground">
+      <div className="mt-2 space-y-2 text-xs">
+        {/* Candidate Profile Information (for application notifications) */}
+        {notification.type === 'application' && data.candidateId && (
+          <div className="p-3 bg-muted/50 rounded-lg space-y-2 border border-border/50">
+            <div className="flex items-center justify-between">
+              <h4 className="font-semibold text-sm">Candidate Profile</h4>
+              {data.viewProfileUrl && (
+                <Button 
+                  size="sm" 
+                  variant="outline" 
+                  className="h-7 text-xs"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    router.push(data.viewProfileUrl);
+                  }}
+                >
+                  <UserCheck className="h-3 w-3 mr-1" />
+                  View Profile
+                </Button>
+              )}
+            </div>
+            
+            {data.candidateName && (
+              <div className="flex items-center gap-1.5">
+                <UserCheck className="h-3 w-3 text-muted-foreground" />
+                <span className="font-medium">{data.candidateName}</span>
+              </div>
+            )}
+            
+            {data.candidateCurrentRole && (
+              <div className="flex items-center gap-1.5">
+                <Briefcase className="h-3 w-3 text-muted-foreground" />
+                <span className="text-muted-foreground">{data.candidateCurrentRole}</span>
+              </div>
+            )}
+            
+            {data.candidateLocation && (
+              <div className="flex items-center gap-1.5">
+                <MapPin className="h-3 w-3 text-muted-foreground" />
+                <span className="text-muted-foreground">{data.candidateLocation}</span>
+              </div>
+            )}
+            
+            {data.candidateEmail && (
+              <div className="flex items-center gap-1.5">
+                <MessageSquare className="h-3 w-3 text-muted-foreground" />
+                <span className="text-muted-foreground">{data.candidateEmail}</span>
+              </div>
+            )}
+            
+            {data.candidateSkills && data.candidateSkills.length > 0 && (
+              <div className="flex flex-wrap gap-1 mt-1">
+                {data.candidateSkills.slice(0, 5).map((skill: string, idx: number) => (
+                  <Badge key={idx} variant="secondary" className="text-xs px-1.5 py-0">
+                    {skill}
+                  </Badge>
+                ))}
+                {data.candidateSkills.length > 5 && (
+                  <Badge variant="outline" className="text-xs px-1.5 py-0">
+                    +{data.candidateSkills.length - 5} more
+                  </Badge>
+                )}
+              </div>
+            )}
+            
+            {data.candidateResumeUrl && (
+              <Button
+                size="sm"
+                variant="link"
+                className="h-6 p-0 text-xs text-primary"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  window.open(data.candidateResumeUrl, '_blank');
+                }}
+              >
+                <FileText className="h-3 w-3 mr-1" />
+                View Resume
+              </Button>
+            )}
+          </div>
+        )}
+        
+        {/* Job Information */}
         {data.jobId && (
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 text-muted-foreground">
             <FileText className="h-3 w-3" />
-            <span>Job ID: {data.jobId.substring(0, 8)}...</span>
+            <span>Job: {data.jobTitle || data.jobId.substring(0, 8)}</span>
           </div>
         )}
-        {data.posterId && (
-          <div className="flex items-center gap-1">
-            <Building2 className="h-3 w-3" />
-            <span>Posted by: {data.posterId.substring(0, 8)}...</span>
-          </div>
-        )}
-        {data.candidateId && (
-          <div className="flex items-center gap-1">
-            <UserCheck className="h-3 w-3" />
-            <span>Candidate: {data.candidateId.substring(0, 8)}...</span>
-          </div>
-        )}
+        
+        {/* Application Status */}
         {data.applicationStatus && (
           <Badge variant="outline" className="mt-1">
             Status: {data.applicationStatus}
@@ -126,16 +241,45 @@ export default function NotificationsPage() {
     );
   }
 
+  const unreadCount = notifications?.filter(n => !n.read && n.id).length || 0;
+
   return (
     <div className="grid gap-6">
-      <h1 className="font-headline text-3xl font-bold tracking-tight">
-        Notifications
-      </h1>
+      <div className="flex items-center justify-between">
+        <h1 className="font-headline text-3xl font-bold tracking-tight">
+          Notifications
+          {unreadCount > 0 && (
+            <Badge className="ml-3 bg-red-600 hover:bg-red-700">
+              {unreadCount} unread
+            </Badge>
+          )}
+        </h1>
+        {notifications && notifications.length > 0 && unreadCount > 0 && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleMarkAllAsRead}
+            disabled={isMarkingAllRead}
+          >
+            {isMarkingAllRead ? (
+              <>
+                <Check className="mr-2 h-4 w-4 animate-pulse" />
+                Marking...
+              </>
+            ) : (
+              <>
+                <Check className="mr-2 h-4 w-4" />
+                Mark all as read
+              </>
+            )}
+          </Button>
+        )}
+      </div>
       <Card>
         <CardHeader>
           <CardTitle>Stay Updated</CardTitle>
           <CardDescription>
-            Here are your latest notifications.
+            Here are your latest notifications. Unread notifications will be automatically cleared after viewing.
           </CardDescription>
         </CardHeader>
         <CardContent>

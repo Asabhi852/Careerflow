@@ -70,6 +70,33 @@ function MessagesPageContent() {
         );
     }, [messages, selectedConversation, user]);
 
+    // Auto-mark messages as read when viewing conversation
+    useEffect(() => {
+        if (!user || !firestore || !selectedConversation || !filteredMessages) return;
+
+        const unreadMessages = filteredMessages.filter(
+            msg => msg.receiverId === user.uid && !msg.read && msg.id
+        );
+
+        if (unreadMessages.length > 0) {
+            // Mark messages as read after a short delay
+            const timer = setTimeout(async () => {
+                try {
+                    const updatePromises = unreadMessages.map(async (msg) => {
+                        const messageRef = doc(firestore, 'users', user.uid, 'messages', msg.id);
+                        await setDocumentNonBlocking(messageRef, { read: true }, { merge: true });
+                    });
+                    await Promise.all(updatePromises);
+                    console.log(`Marked ${unreadMessages.length} messages as read`);
+                } catch (error) {
+                    console.error('Error marking messages as read:', error);
+                }
+            }, 1000); // 1 second delay
+
+            return () => clearTimeout(timer);
+        }
+    }, [filteredMessages, selectedConversation, user, firestore]);
+
     const scrollAreaViewport = useRef<HTMLDivElement>(null);
     const scrollToBottom = () => {
         if(scrollAreaViewport.current) {
