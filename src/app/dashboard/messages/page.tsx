@@ -64,10 +64,19 @@ function MessagesPageContent() {
 
     const filteredMessages = useMemo(() => {
         if (!messages || !selectedConversation || !user) return [];
-        return messages.filter(msg =>
+        
+        // Filter messages for this conversation
+        const conversationMessages = messages.filter(msg =>
             (msg.senderId === user.uid && msg.receiverId === selectedConversation.id) ||
             (msg.senderId === selectedConversation.id && msg.receiverId === user.uid)
         );
+        
+        // Sort messages by timestamp to ensure proper sequential order
+        return conversationMessages.sort((a, b) => {
+            const aTime = a.timestamp?.toDate?.()?.getTime() || a.timestamp?.getTime?.() || 0;
+            const bTime = b.timestamp?.toDate?.()?.getTime() || b.timestamp?.getTime?.() || 0;
+            return aTime - bTime;
+        });
     }, [messages, selectedConversation, user]);
 
     // Auto-mark messages as read when viewing conversation
@@ -100,10 +109,24 @@ function MessagesPageContent() {
     const scrollAreaViewport = useRef<HTMLDivElement>(null);
     const scrollToBottom = () => {
         if(scrollAreaViewport.current) {
-            scrollAreaViewport.current.scrollTo({ top: scrollAreaViewport.current.scrollHeight, behavior: 'smooth' });
+            const viewport = scrollAreaViewport.current;
+            // Use requestAnimationFrame for smoother scrolling
+            requestAnimationFrame(() => {
+                viewport.scrollTo({ 
+                    top: viewport.scrollHeight, 
+                    behavior: 'smooth' 
+                });
+            });
         }
     }
-    useEffect(scrollToBottom, [filteredMessages]);
+    
+    // Auto-scroll when messages change or conversation changes
+    useEffect(() => {
+        if (filteredMessages.length > 0) {
+            // Small delay to ensure DOM is updated
+            setTimeout(scrollToBottom, 100);
+        }
+    }, [filteredMessages, selectedConversation]);
 
     const handleSendMessage = async () => {
         if (!input.trim() || !user || !firestore || !selectedConversation) return;
@@ -191,15 +214,16 @@ function MessagesPageContent() {
                                         </div>
                                     </div>
                                 </CardHeader>
-                                <ScrollArea className="flex-1 p-6" viewportRef={scrollAreaViewport}>
-                                    <div className="space-y-4">
+                                <ScrollArea className="flex-1 p-4 md:p-6" viewportRef={scrollAreaViewport}>
+                                    <div className="space-y-2 min-h-0">
                                         {isLoadingMessages && <div className="text-center p-8"><p className="text-muted-foreground">Loading messages...</p></div>}
                                         {!isLoadingMessages && filteredMessages.length === 0 && (
                                             <div className="text-center p-8">
                                                 <p className="text-muted-foreground">No messages yet. Start a conversation!</p>
                                             </div>
                                         )}
-                                        {filteredMessages.map((msg, index) => {
+                                        <div className="space-y-2">
+                                            {filteredMessages.map((msg, index) => {
                                             const isSender = msg.senderId === user?.uid;
                                             const timestamp = msg.timestamp?.toDate?.() || msg.timestamp;
                                             
@@ -257,19 +281,21 @@ function MessagesPageContent() {
                                                             </Avatar>
                                                         )}
                                                         {!isSender && shouldGroup && <div className="w-8" />}
-                                                        <div className={`flex flex-col ${isSender ? 'items-end' : 'items-start'} max-w-[70%]`}>
-                                                            <div className={`group relative px-3 py-2 rounded-lg shadow-sm ${
+                                                        <div className={`flex flex-col ${isSender ? 'items-end' : 'items-start'} max-w-[75%] min-w-0`}>
+                                                            <div className={`group relative px-3 py-2 rounded-lg shadow-sm overflow-hidden ${
                                                                 isSender 
                                                                     ? 'bg-[#dcf8c6] text-gray-900' 
                                                                     : 'bg-white border border-gray-200 text-gray-900'
                                                             } ${!shouldGroup ? (isSender ? 'rounded-br-none' : 'rounded-bl-none') : ''}`}>
-                                                                <p className="break-words text-sm leading-relaxed">{msg.content}</p>
+                                                                <p className="break-words text-sm leading-relaxed whitespace-pre-wrap word-break-all overflow-wrap-anywhere max-w-full">
+                                                                    {msg.content}
+                                                                </p>
                                                                 <div className={`flex items-center gap-1 mt-1 ${isSender ? 'justify-end' : 'justify-start'}`}>
-                                                                    <span className="text-[10px] text-gray-500">
+                                                                    <span className="text-[10px] text-gray-500 whitespace-nowrap">
                                                                         {timeString}
                                                                     </span>
                                                                     {isSender && (
-                                                                        <span className="text-blue-500">
+                                                                        <span className="text-blue-500 flex-shrink-0">
                                                                             {msg.read ? (
                                                                                 <CheckCheck className="h-3 w-3" />
                                                                             ) : msg.status === 'delivered' ? (
@@ -297,6 +323,7 @@ function MessagesPageContent() {
                                                 </div>
                                             );
                                         })}
+                                        </div>
                                     </div>
                                 </ScrollArea>
                                 <div className="p-4 border-t bg-muted/20">
