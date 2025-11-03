@@ -71,6 +71,7 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
     const applicationData = {
       jobPostingId: job.id,
       applicantId: user.uid,
+      posterId: job.posterId, // Add posterId for Firestore rules
       jobTitle: job.title,
       company: companyName,
       applicationDate: serverTimestamp(),

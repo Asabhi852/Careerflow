@@ -307,9 +307,6 @@ export async function markAllNotificationsAsRead(
   }
 }
 
-/**
- * Get notification icon based on type
- */
 export function getNotificationIcon(type: Notification['type']) {
   switch (type) {
     case 'new_job_posted':
@@ -351,4 +348,36 @@ export function getNotificationColor(type: Notification['type']): string {
     default:
       return 'text-gray-600';
   }
+}
+
+/**
+ * Notify recruiter when a candidate withdraws their application
+ */
+export async function notifyApplicationWithdrawn(
+  firestore: Firestore,
+  posterId: string,
+  withdrawalData: {
+    candidateId: string;
+    candidateName: string;
+    jobId: string;
+    jobTitle: string;
+    applicationId: string;
+  }
+): Promise<void> {
+  await createNotification(firestore, posterId, {
+    userId: posterId,
+    title: '📝 Application Withdrawn',
+    message: `${withdrawalData.candidateName} has withdrawn their application for the "${withdrawalData.jobTitle}" position`,
+    type: 'application_update',
+    data: {
+      candidateId: withdrawalData.candidateId,
+      applicantId: withdrawalData.candidateId,
+      candidateName: withdrawalData.candidateName,
+      jobId: withdrawalData.jobId,
+      jobTitle: withdrawalData.jobTitle,
+      applicationId: withdrawalData.applicationId,
+      applicationStatus: 'withdrawn',
+      previousStatus: 'submitted', // Assume it was submitted before withdrawal
+    },
+  });
 }

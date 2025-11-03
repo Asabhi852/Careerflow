@@ -25,6 +25,7 @@ import {
   FileText,
   BrainCircuit,
 } from 'lucide-react';
+import { NotificationDropdown } from '@/components/notifications/notification-dropdown';
 import { Logo } from '@/components/shared/logo';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { signOut } from 'firebase/auth';
@@ -112,14 +113,22 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
           <SidebarMenu>
             {menuItems.map(item => (
               <SidebarMenuItem key={item.href}>
-                <SidebarMenuButton 
-                  href={item.href} 
-                  isActive={isMenuItemActive(item)}
-                  onClick={handleMenuClick}
-                >
-                  <item.icon />
-                  {item.label}
-                </SidebarMenuButton>
+                {item.href === '/dashboard/notifications' ? (
+                  // Special notification menu item with dropdown
+                  <div className="flex items-center gap-2 px-2 py-2">
+                    <NotificationDropdown />
+                    <span className="text-sm font-medium">Notifications</span>
+                  </div>
+                ) : (
+                  <SidebarMenuButton 
+                    href={item.href} 
+                    isActive={isMenuItemActive(item)}
+                    onClick={handleMenuClick}
+                  >
+                    <item.icon />
+                    {item.label}
+                  </SidebarMenuButton>
+                )}
               </SidebarMenuItem>
             ))}
           </SidebarMenu>

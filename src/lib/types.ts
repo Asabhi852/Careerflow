@@ -128,10 +128,11 @@ export type Application = {
   id: string;
   jobPostingId: string;
   applicantId: string;
+  posterId: string; // Job poster/owner ID
   jobTitle: string;
   company: string;
   applicationDate: Timestamp;
-  status: 'submitted' | 'reviewed' | 'interviewing' | 'offered' | 'rejected';
+  status: 'submitted' | 'reviewed' | 'interviewing' | 'offered' | 'rejected' | 'withdrawn';
 }
 
 export type Message = {
