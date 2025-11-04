@@ -20,7 +20,8 @@ import { formatDistanceToNow } from 'date-fns';
 import Link from 'next/link';
 // @ts-ignore - Lucide icons import issue
 import { Briefcase, FileText, TrendingUp, Users, CheckCircle, Clock, XCircle, Eye, ArrowRight, BarChart3, Target } from 'lucide-react';
-
+import { ResumeBasedJobRecommendations } from '@/components/ai-matches/resume-based-job-recommendations';
+import { EnhancedCareerDevelopment } from '@/components/ai-matches/enhanced-career-development';
 
 const statusVariant: { [key: string]: 'default' | 'secondary' | 'outline' | 'destructive' } = {
   submitted: 'secondary',
@@ -505,6 +506,12 @@ export default function DashboardPage() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Resume-Based Job Recommendations */}
+          <ResumeBasedJobRecommendations />
+
+          {/* Enhanced Career Development */}
+          <EnhancedCareerDevelopment />
         </div>
       </div>
     </div>

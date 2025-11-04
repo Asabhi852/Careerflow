@@ -59,8 +59,10 @@ export async function POST(request: NextRequest) {
       createdAt: new Date().toISOString(),
     };
 
-    // Get available jobs from internal database ONLY
-    const jobs = await getInternalJobs();
+    // Get available jobs from internal database AND external sources
+    const internalJobs = await getInternalJobs();
+    const externalJobs = await getExternalJobs();
+    const jobs = [...internalJobs, ...externalJobs];
 
     if (jobs.length === 0) {
       return NextResponse.json({
@@ -193,7 +195,6 @@ async function getInternalJobs(): Promise<JobPosting[]> {
         employmentType: data.employmentType || 'Full-time',
         experienceLevel: data.experienceLevel || '',
         postedDate: data.postedDate || new Date().toISOString(),
-        ...data,
       } as JobPosting);
     });
 
@@ -201,6 +202,36 @@ async function getInternalJobs(): Promise<JobPosting[]> {
     return jobs;
   } catch (error) {
     console.error('Error fetching internal jobs:', error);
+    return [];
+  }
+}
+
+/**
+ * Get external jobs from LinkedIn and Naukri
+ */
+async function getExternalJobs(): Promise<JobPosting[]> {
+  try {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/jobs/external?source=all&limit=50`);
+    
+    if (!response.ok) {
+      console.warn('Failed to fetch external jobs');
+      return [];
+    }
+
+    const data = await response.json();
+    
+    if (data.success && data.data) {
+      return data.data.map((job: any) => ({
+        ...job,
+        source: job.source || 'external',
+        posterId: job.posterId || 'external-system',
+        status: job.status || 'active',
+      })) as JobPosting[];
+    }
+    
+    return [];
+  } catch (error) {
+    console.error('Error fetching external jobs:', error);
     return [];
   }
 }

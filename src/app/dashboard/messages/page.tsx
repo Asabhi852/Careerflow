@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 // @ts-ignore - Lucide icons import issue
-import { Send, MessageSquare, Check, CheckCheck, Clock } from 'lucide-react';
+import { Send, MessageSquare, Check, CheckCheck, Clock, ArrowDown } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useUser, useFirestore, useCollection, useMemoFirebase, addDocumentNonBlocking, setDocumentNonBlocking, useDoc } from '@/firebase';
 // @ts-ignore - Firebase Firestore import issue
@@ -107,26 +107,68 @@ function MessagesPageContent() {
     }, [filteredMessages, selectedConversation, user, firestore]);
 
     const scrollAreaViewport = useRef<HTMLDivElement>(null);
-    const scrollToBottom = () => {
-        if(scrollAreaViewport.current) {
-            const viewport = scrollAreaViewport.current;
+    const messagesEndRef = useRef<HTMLDivElement>(null);
+    const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
+
+    // Improved scroll to bottom function with better reliability
+    const scrollToBottom = useCallback((force = false) => {
+        if (!scrollAreaViewport.current || (!shouldAutoScroll && !force)) return;
+
+        const viewport = scrollAreaViewport.current;
+        const scrollHeight = viewport.scrollHeight;
+        const clientHeight = viewport.clientHeight;
+        const scrollTop = viewport.scrollTop;
+
+        // Check if user is near bottom (within 100px)
+        const isNearBottom = scrollHeight - scrollTop - clientHeight < 100;
+
+        if (force || isNearBottom) {
             // Use requestAnimationFrame for smoother scrolling
             requestAnimationFrame(() => {
-                viewport.scrollTo({ 
-                    top: viewport.scrollHeight, 
-                    behavior: 'smooth' 
+                viewport.scrollTo({
+                    top: scrollHeight,
+                    behavior: 'smooth'
                 });
             });
         }
-    }
-    
+    }, [shouldAutoScroll]);
+
+    const [showScrollButton, setShowScrollButton] = useState(false);
+
+    // Handle scroll events to detect user scrolling and show/hide scroll button
+    const handleScroll = useCallback(() => {
+        if (!scrollAreaViewport.current) return;
+
+        const viewport = scrollAreaViewport.current;
+        const scrollHeight = viewport.scrollHeight;
+        const clientHeight = viewport.clientHeight;
+        const scrollTop = viewport.scrollTop;
+
+        // If user scrolls up more than 100px from bottom, disable auto-scroll and show button
+        const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+        const shouldShowButton = distanceFromBottom > 150; // Show button if more than 150px from bottom
+
+        setShouldAutoScroll(distanceFromBottom < 100);
+        setShowScrollButton(shouldShowButton);
+    }, []);
+
     // Auto-scroll when messages change or conversation changes
     useEffect(() => {
         if (filteredMessages.length > 0) {
             // Small delay to ensure DOM is updated
-            setTimeout(scrollToBottom, 100);
+            const timeoutId = setTimeout(() => scrollToBottom(), 100);
+            return () => clearTimeout(timeoutId);
         }
-    }, [filteredMessages, selectedConversation]);
+    }, [filteredMessages, selectedConversation, scrollToBottom]);
+
+    // Add scroll event listener
+    useEffect(() => {
+        const viewport = scrollAreaViewport.current;
+        if (viewport) {
+            viewport.addEventListener('scroll', handleScroll, { passive: true });
+            return () => viewport.removeEventListener('scroll', handleScroll);
+        }
+    }, [handleScroll]);
 
     const handleSendMessage = async () => {
         if (!input.trim() || !user || !firestore || !selectedConversation) return;
@@ -174,6 +216,9 @@ function MessagesPageContent() {
             }
             
             setInput('');
+
+            // Force scroll to bottom after sending message
+            setTimeout(() => scrollToBottom(true), 200);
         } catch (error) {
             console.error("Error sending message:", error);
         } finally {
@@ -214,8 +259,8 @@ function MessagesPageContent() {
                                         </div>
                                     </div>
                                 </CardHeader>
-                                <ScrollArea className="flex-1 p-4 md:p-6" viewportRef={scrollAreaViewport}>
-                                    <div className="space-y-2 min-h-0">
+                                <ScrollArea className="flex-1 p-4 md:p-6 relative" viewportRef={scrollAreaViewport}>
+                                    <div className="space-y-2 min-h-0 pb-4">
                                         {isLoadingMessages && <div className="text-center p-8"><p className="text-muted-foreground">Loading messages...</p></div>}
                                         {!isLoadingMessages && filteredMessages.length === 0 && (
                                             <div className="text-center p-8">
@@ -281,13 +326,13 @@ function MessagesPageContent() {
                                                             </Avatar>
                                                         )}
                                                         {!isSender && shouldGroup && <div className="w-8" />}
-                                                        <div className={`flex flex-col ${isSender ? 'items-end' : 'items-start'} max-w-[75%] min-w-0`}>
+                                                        <div className={`flex flex-col ${isSender ? 'items-end' : 'items-start'} max-w-[75%] min-w-0 flex-shrink-0`}>
                                                             <div className={`group relative px-3 py-2 rounded-lg shadow-sm overflow-hidden ${
                                                                 isSender 
                                                                     ? 'bg-[#dcf8c6] text-gray-900' 
                                                                     : 'bg-white border border-gray-200 text-gray-900'
                                                             } ${!shouldGroup ? (isSender ? 'rounded-br-none' : 'rounded-bl-none') : ''}`}>
-                                                                <p className="break-words text-sm leading-relaxed whitespace-pre-wrap word-break-all overflow-wrap-anywhere max-w-full">
+                                                                <p className="break-words text-sm leading-relaxed whitespace-pre-wrap word-break-all overflow-wrap-anywhere max-w-full overflow-hidden">
                                                                     {msg.content}
                                                                 </p>
                                                                 <div className={`flex items-center gap-1 mt-1 ${isSender ? 'justify-end' : 'justify-start'}`}>
@@ -324,7 +369,21 @@ function MessagesPageContent() {
                                             );
                                         })}
                                         </div>
+                                        {/* Invisible element to scroll to */}
+                                        <div ref={messagesEndRef} />
                                     </div>
+
+                                    {/* Floating scroll to bottom button */}
+                                    {showScrollButton && (
+                                        <Button
+                                            onClick={() => scrollToBottom(true)}
+                                            size="sm"
+                                            className="absolute bottom-6 right-6 rounded-full shadow-lg z-10 bg-primary hover:bg-primary/90"
+                                            title="Scroll to bottom"
+                                        >
+                                            <ArrowDown className="h-4 w-4" />
+                                        </Button>
+                                    )}
                                 </ScrollArea>
                                 <div className="p-4 border-t bg-muted/20">
                                     <div className="flex items-center gap-2">
