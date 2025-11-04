@@ -1,7 +1,7 @@
 'use client';
 
 // @ts-ignore - React hooks import issue
-import { useState, useRef, useEffect, useMemo, Suspense } from 'react';
+import { useState, useRef, useEffect, useMemo, useCallback, Suspense } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';

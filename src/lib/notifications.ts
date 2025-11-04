@@ -211,7 +211,7 @@ export async function notifyProfileView(
     type: 'profile_view',
     data: {
       viewerId: viewData.viewerId,
-      viewerName: viewData.viewerName,
+      ...(viewData.viewerName && { viewerName: viewData.viewerName }),
     },
   });
 }
