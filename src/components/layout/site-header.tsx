@@ -73,23 +73,6 @@ export function SiteHeader() {
     router.push('/login');
   };
 
-  // Don't render authenticated features until mounted to prevent hydration issues
-  if (!isMounted) {
-    return (
-      <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container flex h-16 max-w-screen-2xl items-center">
-          <Logo />
-          <MainNav />
-          <div className="flex flex-1 items-center justify-end space-x-4">
-            <nav className="flex items-center space-x-2">
-              <Loader2 className="h-6 w-6 animate-spin" />
-            </nav>
-          </div>
-        </div>
-      </header>
-    );
-  }
-
   const handleLogout = () => {
     if (auth) {
       signOut(auth).finally(() => router.push('/login'));
@@ -105,7 +88,7 @@ export function SiteHeader() {
         <MainNav />
         <div className="flex flex-1 items-center justify-end space-x-4">
           <nav className="flex items-center space-x-2">
-            {isUserLoading ? (
+            {!isMounted || isUserLoading ? (
               <Loader2 className="h-6 w-6 animate-spin" />
             ) : user ? (
               <>

@@ -110,7 +110,11 @@ export function PostCard({ post, onLike, isLiked }: PostCardProps) {
                 {post.certificate.issueDate && (
                   <p className="text-xs text-gray-500 mt-1 flex items-center gap-1">
                     <Calendar className="h-3 w-3" />
-                    {new Date(post.certificate.issueDate).toLocaleDateString()}
+                    {(() => {
+                      const date = new Date(post.certificate.issueDate);
+                      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                      return `${monthNames[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`;
+                    })()}
                   </p>
                 )}
                 {post.certificate.credentialId && (

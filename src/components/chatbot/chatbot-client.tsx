@@ -407,7 +407,14 @@ export function ChatbotClient() {
                       <div className={`text-xs mt-2 ${
                         message.sender === 'user' ? 'text-blue-100' : 'text-gray-500'
                       }`}>
-                        {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        {(() => {
+                          const date = message.timestamp;
+                          const hours = date.getHours();
+                          const minutes = date.getMinutes().toString().padStart(2, '0');
+                          const ampm = hours >= 12 ? 'PM' : 'AM';
+                          const displayHours = hours % 12 || 12;
+                          return `${displayHours}:${minutes} ${ampm}`;
+                        })()}
                       </div>
                     </div>
                   </div>

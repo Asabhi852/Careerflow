@@ -218,7 +218,10 @@ export function ResumeBasedJobRecommendations() {
                 Found {recommendations.length} job matches
                 {lastAnalysis && (
                   <span className="ml-2">
-                    • Analyzed {lastAnalysis.toLocaleDateString()}
+                    • Analyzed {(() => {
+                      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                      return `${monthNames[lastAnalysis.getMonth()]} ${lastAnalysis.getDate()}, ${lastAnalysis.getFullYear()}`;
+                    })()}
                   </span>
                 )}
               </p>

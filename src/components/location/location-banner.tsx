@@ -20,9 +20,17 @@ interface LocationBannerProps {
 export function LocationBanner({ onLocationEnabled, onLocationDenied }: LocationBannerProps) {
   const [isVisible, setIsVisible] = useState(false);
   const [isDismissed, setIsDismissed] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
   const { coordinates, isLoading, requestLocation, permissionDenied, locationString } = useGeolocation(false);
 
+  // Initialize mounted state
   useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!isMounted) return;
+
     // Check if running in secure context (HTTPS or localhost)
     if (typeof window !== 'undefined' && !window.isSecureContext) {
       // Silently hide banner when not in secure context
@@ -31,7 +39,7 @@ export function LocationBanner({ onLocationEnabled, onLocationDenied }: Location
     }
 
     // Check if user has already granted/denied location
-    const hasLocationPermission = localStorage.getItem('location_permission');
+    const hasLocationPermission = typeof window !== 'undefined' ? localStorage.getItem('location_permission') : null;
     
     if (!hasLocationPermission && !isDismissed) {
       // Show banner after a short delay for better UX
@@ -40,11 +48,13 @@ export function LocationBanner({ onLocationEnabled, onLocationDenied }: Location
       }, 1000);
       return () => clearTimeout(timer);
     }
-  }, [isDismissed]);
+  }, [isDismissed, isMounted]);
 
   useEffect(() => {
     if (coordinates) {
-      localStorage.setItem('location_permission', 'granted');
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('location_permission', 'granted');
+      }
       setIsVisible(false);
       onLocationEnabled();
     }
@@ -52,7 +62,9 @@ export function LocationBanner({ onLocationEnabled, onLocationDenied }: Location
 
   useEffect(() => {
     if (permissionDenied) {
-      localStorage.setItem('location_permission', 'denied');
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('location_permission', 'denied');
+      }
       setIsVisible(false);
       onLocationDenied();
     }
@@ -65,7 +77,9 @@ export function LocationBanner({ onLocationEnabled, onLocationDenied }: Location
   const handleDismiss = () => {
     setIsDismissed(true);
     setIsVisible(false);
-    localStorage.setItem('location_permission', 'dismissed');
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('location_permission', 'dismissed');
+    }
   };
 
   if (!isVisible) return null;

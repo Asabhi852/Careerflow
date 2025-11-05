@@ -8,14 +8,31 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 // @ts-ignore - Lucide icons import issue
-import { Send, MessageSquare, Check, CheckCheck, Clock, ArrowDown } from 'lucide-react';
+import { Send, MessageSquare, Check, CheckCheck, Clock, ArrowDown, MoreVertical, Trash2 } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { useUser, useFirestore, useCollection, useMemoFirebase, addDocumentNonBlocking, setDocumentNonBlocking, useDoc } from '@/firebase';
 // @ts-ignore - Firebase Firestore import issue
-import { collection, query, orderBy, serverTimestamp, doc } from 'firebase/firestore';
+import { collection, query, orderBy, serverTimestamp, doc, Timestamp, deleteDoc, writeBatch } from 'firebase/firestore';
 import type { Message, UserProfile } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { notifyNewMessage } from '@/lib/notifications';
+import { toast } from '@/hooks/use-toast';
 // @ts-ignore - Next.js navigation import issue
 import { useSearchParams } from 'next/navigation';
 import { ConversationList } from '@/components/ConversationList';
@@ -29,6 +46,10 @@ function MessagesPageContent() {
     const [input, setInput] = useState('');
     const [isSending, setIsSending] = useState(false);
     const [isTyping, setIsTyping] = useState(false);
+    const [showClearChatDialog, setShowClearChatDialog] = useState(false);
+    const [showDeleteMessageDialog, setShowDeleteMessageDialog] = useState(false);
+    const [messageToDelete, setMessageToDelete] = useState<Message | null>(null);
+    const [isDeleting, setIsDeleting] = useState(false);
     const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
     // Use the new conversations hook
@@ -67,40 +88,97 @@ function MessagesPageContent() {
         
         // Filter messages for this conversation
         const conversationMessages = messages.filter(msg =>
-            (msg.senderId === user.uid && msg.receiverId === selectedConversation.id) ||
-            (msg.senderId === selectedConversation.id && msg.receiverId === user.uid)
+            msg.id && // Must have an ID
+            ((msg.senderId === user.uid && msg.receiverId === selectedConversation.id) ||
+            (msg.senderId === selectedConversation.id && msg.receiverId === user.uid))
         );
+        
+        // Deduplicate messages by ID (in case of duplicates in database)
+        const uniqueMessages = Array.from(
+            new Map(conversationMessages.map(msg => [msg.id, msg])).values()
+        );
+        
+        // Debug: Log messages for troubleshooting (only in development)
+        if (process.env.NODE_ENV === 'development' && uniqueMessages.length > 0) {
+            console.log('Messages before sort:', uniqueMessages.map(m => ({
+                id: m.id?.substring(0, 8),
+                content: m.content?.substring(0, 20),
+                timestamp: m.timestamp
+            })));
+        }
         
         // Sort messages by timestamp to ensure proper sequential order
         // Handle both Firestore Timestamp and Date objects
-        return conversationMessages.sort((a, b) => {
-            let aTime = 0;
-            let bTime = 0;
+        const sortedMessages = uniqueMessages.sort((a, b) => {
+            // Helper function to extract timestamp in milliseconds
+            const getTimestamp = (msg: Message): number => {
+                if (!msg.timestamp) return 0;
+                
+                // Firestore Timestamp with toDate method
+                if (typeof msg.timestamp.toDate === 'function') {
+                    try {
+                        return msg.timestamp.toDate().getTime();
+                    } catch (e) {
+                        console.warn('Failed to convert timestamp:', e);
+                    }
+                }
+                
+                // Firestore Timestamp with seconds property
+                if (typeof msg.timestamp.seconds === 'number') {
+                    return msg.timestamp.seconds * 1000 + (msg.timestamp.nanoseconds || 0) / 1000000;
+                }
+                
+                // JavaScript Date object
+                if (msg.timestamp instanceof Date) {
+                    return msg.timestamp.getTime();
+                }
+                
+                // Date string or number
+                try {
+                    const parsed = new Date(msg.timestamp as any).getTime();
+                    if (!isNaN(parsed)) return parsed;
+                } catch (e) {
+                    // Ignore parse errors
+                }
+                
+                return 0;
+            };
             
-            // Handle Firestore Timestamp objects
-            if (a.timestamp?.toDate) {
-                aTime = a.timestamp.toDate().getTime();
-            } else if (a.timestamp?.getTime) {
-                aTime = a.timestamp.getTime();
-            } else if (a.timestamp?.seconds) {
-                aTime = a.timestamp.seconds * 1000;
+            const aTime = getTimestamp(a);
+            const bTime = getTimestamp(b);
+            
+            // If both have valid timestamps, sort by time
+            if (aTime && bTime && aTime !== bTime) {
+                return aTime - bTime;
             }
             
-            if (b.timestamp?.toDate) {
-                bTime = b.timestamp.toDate().getTime();
-            } else if (b.timestamp?.getTime) {
-                bTime = b.timestamp.getTime();
-            } else if (b.timestamp?.seconds) {
-                bTime = b.timestamp.seconds * 1000;
-            }
-            
-            // If timestamps are the same or missing, maintain insertion order by using message ID
+            // If timestamps are identical or both missing, use message ID for stable sort
             if (aTime === bTime) {
                 return (a.id || '').localeCompare(b.id || '');
             }
             
-            return aTime - bTime;
+            // Messages without timestamps go to the end
+            if (!aTime && bTime) return 1;
+            if (aTime && !bTime) return -1;
+            
+            return 0;
         });
+        
+        // Debug: Log sorted messages (only in development)
+        if (process.env.NODE_ENV === 'development' && sortedMessages.length > 0) {
+            console.log('Messages after sort:', sortedMessages.map(m => ({
+                id: m.id?.substring(0, 8),
+                content: m.content?.substring(0, 20),
+                timestamp: m.timestamp,
+                extractedTime: (() => {
+                    if (m.timestamp?.toDate) return m.timestamp.toDate().toISOString();
+                    if (m.timestamp?.seconds) return new Date(m.timestamp.seconds * 1000).toISOString();
+                    return 'unknown';
+                })()
+            })));
+        }
+        
+        return sortedMessages;
     }, [messages, selectedConversation, user]);
 
     // Auto-mark messages as read when viewing conversation
@@ -183,7 +261,7 @@ function MessagesPageContent() {
             const timeoutId = setTimeout(() => scrollToBottom(), 100);
             return () => clearTimeout(timeoutId);
         }
-    }, [filteredMessages, selectedConversation, scrollToBottom]);
+    }, [filteredMessages.length, selectedConversation, scrollToBottom]);
 
     // Add scroll event listener
     useEffect(() => {
@@ -193,6 +271,69 @@ function MessagesPageContent() {
             return () => viewport.removeEventListener('scroll', handleScroll);
         }
     }, [handleScroll]);
+
+    // Clear all messages in the current conversation
+    const handleClearChat = async () => {
+        if (!user || !firestore || !selectedConversation) return;
+
+        setIsDeleting(true);
+        try {
+            const batch = writeBatch(firestore);
+            
+            // Delete all messages for this conversation from user's messages
+            filteredMessages.forEach((msg) => {
+                const messageRef = doc(firestore, 'users', user.uid, 'messages', msg.id);
+                batch.delete(messageRef);
+            });
+
+            await batch.commit();
+            
+            toast({
+                title: 'Chat cleared',
+                description: 'All messages in this conversation have been deleted.',
+            });
+            
+            setShowClearChatDialog(false);
+        } catch (error) {
+            console.error('Error clearing chat:', error);
+            toast({
+                variant: 'destructive',
+                title: 'Error',
+                description: 'Failed to clear chat. Please try again.',
+            });
+        } finally {
+            setIsDeleting(false);
+        }
+    };
+
+    // Delete a single message
+    const handleDeleteMessage = async () => {
+        if (!user || !firestore || !messageToDelete) return;
+
+        setIsDeleting(true);
+        try {
+            // Delete message from user's messages collection
+            const messageRef = doc(firestore, 'users', user.uid, 'messages', messageToDelete.id);
+            await deleteDoc(messageRef);
+            
+            toast({
+                title: 'Message deleted',
+                description: 'The message has been removed.',
+            });
+            
+            setShowDeleteMessageDialog(false);
+            setMessageToDelete(null);
+        } catch (error) {
+            console.error('Error deleting message:', error);
+            toast({
+                variant: 'destructive',
+                title: 'Error',
+                description: 'Failed to delete message. Please try again.',
+            });
+        } finally {
+            setIsDeleting(false);
+        }
+    };
 
     const handleSendMessage = async () => {
         if (!input.trim() || !user || !firestore || !selectedConversation) return;
@@ -206,14 +347,13 @@ function MessagesPageContent() {
         // @ts-ignore - Firebase doc function
         const messageId = doc(collection(firestore, 'temp')).id; // Generate a unique ID
         
-        // Use client timestamp as fallback to ensure ordering before server timestamp is set
-        const clientTimestamp = new Date();
-
+        // Use current timestamp for immediate and consistent ordering
+        const now = Timestamp.now();
         const messageData: Omit<Message, 'id'> = {
             senderId: user.uid,
             receiverId: selectedConversation.id,
             content: input.trim(),
-            timestamp: serverTimestamp(),
+            timestamp: now,
             status: 'sent',
             read: false,
         };
@@ -268,21 +408,39 @@ function MessagesPageContent() {
                         {selectedConversation ? (
                             <>
                                 <CardHeader className="border-b bg-muted/30">
-                                    <div className="flex items-center gap-3">
-                                        <Avatar className="h-10 w-10">
-                                            <AvatarImage src={selectedConversation.profilePictureUrl} />
-                                            <AvatarFallback>
-                                                {selectedConversation.firstName?.[0]}{selectedConversation.lastName?.[0]}
-                                            </AvatarFallback>
-                                        </Avatar>
-                                        <div className="flex flex-col">
-                                            <CardTitle className="text-base">
-                                                {selectedConversation.firstName} {selectedConversation.lastName}
-                                            </CardTitle>
-                                            <p className="text-xs text-muted-foreground">
-                                                {isTyping ? 'typing...' : 'Online'}
-                                            </p>
+                                    <div className="flex items-center justify-between gap-3">
+                                        <div className="flex items-center gap-3">
+                                            <Avatar className="h-10 w-10">
+                                                <AvatarImage src={selectedConversation.profilePictureUrl} />
+                                                <AvatarFallback>
+                                                    {selectedConversation.firstName?.[0]}{selectedConversation.lastName?.[0]}
+                                                </AvatarFallback>
+                                            </Avatar>
+                                            <div className="flex flex-col">
+                                                <CardTitle className="text-base">
+                                                    {selectedConversation.firstName} {selectedConversation.lastName}
+                                                </CardTitle>
+                                                <p className="text-xs text-muted-foreground">
+                                                    {isTyping ? 'typing...' : 'Online'}
+                                                </p>
+                                            </div>
                                         </div>
+                                        <DropdownMenu>
+                                            <DropdownMenuTrigger asChild>
+                                                <Button variant="ghost" size="icon" className="h-8 w-8">
+                                                    <MoreVertical className="h-4 w-4" />
+                                                </Button>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent align="end">
+                                                <DropdownMenuItem
+                                                    onClick={() => setShowClearChatDialog(true)}
+                                                    className="text-destructive focus:text-destructive"
+                                                >
+                                                    <Trash2 className="mr-2 h-4 w-4" />
+                                                    Clear Chat
+                                                </DropdownMenuItem>
+                                            </DropdownMenuContent>
+                                        </DropdownMenu>
                                     </div>
                                 </CardHeader>
                                 <ScrollArea className="flex-1 p-4 md:p-6 relative" viewportRef={scrollAreaViewport}>
@@ -304,9 +462,14 @@ function MessagesPageContent() {
                                             const isYesterday = timestamp instanceof Date && 
                                                 new Date(timestamp.getTime() + 86400000).toDateString() === now.toDateString();
                                             
-                                            const timeString = timestamp instanceof Date 
-                                                ? timestamp.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
-                                                : '';
+                                            let timeString = '';
+                                            if (timestamp instanceof Date) {
+                                                const hours = timestamp.getHours();
+                                                const minutes = timestamp.getMinutes().toString().padStart(2, '0');
+                                                const ampm = hours >= 12 ? 'PM' : 'AM';
+                                                const displayHours = hours % 12 || 12;
+                                                timeString = `${displayHours}:${minutes} ${ampm}`;
+                                            }
                                             
                                             let dateString = '';
                                             if (timestamp instanceof Date) {
@@ -315,7 +478,11 @@ function MessagesPageContent() {
                                                 } else if (isYesterday) {
                                                     dateString = 'Yesterday';
                                                 } else {
-                                                    dateString = timestamp.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                                                    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                                                    const month = monthNames[timestamp.getMonth()];
+                                                    const day = timestamp.getDate();
+                                                    const year = timestamp.getFullYear();
+                                                    dateString = `${month} ${day}, ${year}`;
                                                 }
                                             }
                                             
@@ -334,7 +501,7 @@ function MessagesPageContent() {
                                                 Math.abs(timestamp.getTime() - prevMsg.timestamp.toDate().getTime()) < 60000;
 
                                             return (
-                                                <div key={msg.id || index}>
+                                                <div key={msg.id}>
                                                     {showDateSeparator && dateString && (
                                                         <div className="flex items-center justify-center my-4">
                                                             <Badge variant="secondary" className="px-3 py-1 text-xs font-normal">
@@ -353,14 +520,15 @@ function MessagesPageContent() {
                                                         )}
                                                         {!isSender && shouldGroup && <div className="w-8" />}
                                                         <div className={`flex flex-col ${isSender ? 'items-end' : 'items-start'} max-w-[75%] min-w-0`}>
-                                                            <div className={`group relative px-3 py-2 rounded-lg shadow-sm ${
-                                                                isSender 
-                                                                    ? 'bg-[#dcf8c6] text-gray-900' 
-                                                                    : 'bg-white border border-gray-200 text-gray-900'
-                                                            } ${!shouldGroup ? (isSender ? 'rounded-br-none' : 'rounded-bl-none') : ''}`}>
-                                                                <p className="break-words text-sm leading-relaxed whitespace-pre-wrap overflow-wrap-break-word" style={{ wordBreak: 'break-word', overflowWrap: 'break-word' }}>
-                                                                    {msg.content}
-                                                                </p>
+                                                            <div className="relative group/message">
+                                                                <div className={`px-3 py-2 rounded-lg shadow-sm ${
+                                                                    isSender 
+                                                                        ? 'bg-[#dcf8c6] text-gray-900' 
+                                                                        : 'bg-white border border-gray-200 text-gray-900'
+                                                                } ${!shouldGroup ? (isSender ? 'rounded-br-none' : 'rounded-bl-none') : ''}`}>
+                                                                    <p className="break-words text-sm leading-relaxed whitespace-pre-wrap overflow-wrap-break-word" style={{ wordBreak: 'break-word', overflowWrap: 'break-word' }}>
+                                                                        {msg.content}
+                                                                    </p>
                                                                 <div className={`flex items-center gap-1 mt-1 ${isSender ? 'justify-end' : 'justify-start'}`}>
                                                                     <span className="text-[10px] text-gray-500 whitespace-nowrap">
                                                                         {timeString}
@@ -380,6 +548,20 @@ function MessagesPageContent() {
                                                                     )}
                                                                 </div>
                                                             </div>
+                                                            {/* Delete button - appears on hover */}
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                className={`absolute ${isSender ? '-left-8' : '-right-8'} top-1/2 -translate-y-1/2 h-6 w-6 opacity-0 group-hover/message:opacity-100 transition-opacity`}
+                                                                onClick={() => {
+                                                                    setMessageToDelete(msg);
+                                                                    setShowDeleteMessageDialog(true);
+                                                                }}
+                                                                title="Delete message"
+                                                            >
+                                                                <Trash2 className="h-3 w-3 text-destructive" />
+                                                            </Button>
+                                                        </div>
                                                         </div>
                                                         {isSender && !shouldGroup && (
                                                             <Avatar className="h-8 w-8 flex-shrink-0">
@@ -458,6 +640,52 @@ function MessagesPageContent() {
                     </div>
                 </div>
             </Card>
+
+            {/* Clear Chat Confirmation Dialog */}
+            <AlertDialog open={showClearChatDialog} onOpenChange={setShowClearChatDialog}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Clear this chat?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            This will delete all messages in this conversation from your view. This action cannot be undone.
+                            The other person will still be able to see the messages.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={handleClearChat}
+                            disabled={isDeleting}
+                            className="bg-destructive hover:bg-destructive/90"
+                        >
+                            {isDeleting ? 'Clearing...' : 'Clear Chat'}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            {/* Delete Message Confirmation Dialog */}
+            <AlertDialog open={showDeleteMessageDialog} onOpenChange={setShowDeleteMessageDialog}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Delete this message?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            This will delete the message from your view. This action cannot be undone.
+                            The other person will still be able to see the message.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={handleDeleteMessage}
+                            disabled={isDeleting}
+                            className="bg-destructive hover:bg-destructive/90"
+                        >
+                            {isDeleting ? 'Deleting...' : 'Delete Message'}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
 }
