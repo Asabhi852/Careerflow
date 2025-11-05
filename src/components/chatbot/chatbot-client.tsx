@@ -181,10 +181,7 @@ export function ChatbotClient() {
       text,
       timestamp: new Date()
     };
-    setMessages((prev) => {
-      const newMessages = [...prev, botMessage];
-      return newMessages.sort((a, b) => a.sequence - b.sequence);
-    });
+    setMessages((prev) => [...prev, botMessage]);
   };
 
   // Toggle voice input
@@ -274,10 +271,7 @@ export function ChatbotClient() {
           timestamp: new Date()
         };
 
-        setMessages((prev) => {
-          const newMessages = [...prev, botMessage];
-          return newMessages.sort((a, b) => a.sequence - b.sequence);
-        });
+        setMessages((prev) => [...prev, botMessage]);
 
         // Optionally speak the response
         if (isSpeaking) {
@@ -297,10 +291,7 @@ export function ChatbotClient() {
         timestamp: new Date()
       };
 
-      setMessages((prev) => {
-        const newMessages = [...prev, errorMessage];
-        return newMessages.sort((a, b) => a.sequence - b.sequence);
-      });
+      setMessages((prev) => [...prev, errorMessage]);
     } finally {
       setIsLoading(false);
       
@@ -405,13 +396,13 @@ export function ChatbotClient() {
                     )}
                     
                     <div
-                      className={`px-4 py-3 rounded-2xl shadow-sm break-words overflow-hidden ${
+                      className={`px-4 py-3 rounded-2xl shadow-sm ${
                         message.sender === 'user'
                           ? 'bg-gradient-to-br from-blue-600 to-blue-700 text-white rounded-br-md'
                           : 'bg-white text-gray-900 border border-gray-200 rounded-bl-md'
                       }`}
                     >
-                      <p className="text-sm whitespace-pre-wrap leading-relaxed break-words">{message.text}</p>
+                      <p className="text-sm whitespace-pre-wrap leading-relaxed break-words" style={{ wordBreak: 'break-word', overflowWrap: 'break-word' }}>{message.text}</p>
                       
                       <div className={`text-xs mt-2 ${
                         message.sender === 'user' ? 'text-blue-100' : 'text-gray-500'

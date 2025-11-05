@@ -435,27 +435,84 @@ export default function EnhancedAIMatchesPage() {
               </CardContent>
             </Card>
 
-            {/* Skill Gaps */}
-            <Card>
+            {/* AI-Powered Skill Development Recommendations */}
+            <Card className="border-blue-200 bg-gradient-to-br from-blue-50 to-white">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <BookOpen className="h-5 w-5" />
-                  Skill Development Areas
-                </CardTitle>
-                <CardDescription>
-                  Skills to develop for better job matches
-                </CardDescription>
+                <div className="flex items-center gap-2">
+                  <div className="p-2 bg-blue-100 rounded-lg">
+                    <BookOpen className="h-5 w-5 text-blue-600" />
+                  </div>
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      AI-Recommended Skills to Develop
+                    </CardTitle>
+                    <CardDescription>
+                      Based on your profile analysis and {enhancedMatches.length} job matches
+                    </CardDescription>
+                  </div>
+                </div>
               </CardHeader>
               <CardContent>
-                <div className="space-y-3">
-                  {enhancedMatches.flatMap(m => m.skillGaps).slice(0, 10).map((gap, index) => (
-                    <div key={index} className="flex items-center justify-between">
-                      <span className="text-sm font-medium">{gap.skill}</span>
-                      <Badge variant={gap.importance === 'high' ? 'destructive' : 'outline'}>
-                        {gap.importance}
-                      </Badge>
-                    </div>
-                  ))}
+                <div className="space-y-3 mb-4">
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <TrendingUp className="h-4 w-4 text-green-600" />
+                    <span>Developing these skills can significantly improve your match scores</span>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 gap-3">
+                  {enhancedMatches.flatMap(m => m.skillGaps)
+                    .filter((gap, index, self) => 
+                      index === self.findIndex(g => g.skill === gap.skill)
+                    )
+                    .sort((a, b) => {
+                      const importanceOrder = { high: 0, medium: 1, low: 2 };
+                      return importanceOrder[a.importance] - importanceOrder[b.importance];
+                    })
+                    .slice(0, 10)
+                    .map((gap, index) => (
+                      <div 
+                        key={index} 
+                        className={`p-4 border rounded-lg space-y-2 transition-all hover:shadow-md ${
+                          gap.importance === 'high' 
+                            ? 'border-red-200 bg-red-50/50' 
+                            : gap.importance === 'medium'
+                            ? 'border-orange-200 bg-orange-50/50'
+                            : 'border-gray-200 bg-white'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-semibold">{gap.skill}</span>
+                          <Badge 
+                            variant={gap.importance === 'high' ? 'destructive' : 'outline'}
+                            className={
+                              gap.importance === 'high' 
+                                ? 'bg-red-600' 
+                                : gap.importance === 'medium'
+                                ? 'bg-orange-500 text-white'
+                                : ''
+                            }
+                          >
+                            {gap.importance} priority
+                          </Badge>
+                        </div>
+                        
+                        {gap.learningResources && gap.learningResources.length > 0 && (
+                          <div className="text-xs text-muted-foreground">
+                            <div className="font-medium mb-1">Learning Resources:</div>
+                            <div className="flex flex-wrap gap-1">
+                              {gap.learningResources.slice(0, 4).map((resource, idx) => (
+                                <span 
+                                  key={idx}
+                                  className="inline-flex items-center px-2 py-1 bg-white border rounded hover:bg-blue-50 cursor-pointer transition-colors"
+                                >
+                                  {resource}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
                 </div>
               </CardContent>
             </Card>

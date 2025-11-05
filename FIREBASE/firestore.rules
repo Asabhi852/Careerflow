@@ -11,9 +11,10 @@ service cloud.firestore {
       allow update, delete: if request.auth != null && request.auth.uid == resource.data.authorId; // Only author can update/delete
     }
     
-    // Users collection - Private
+    // Users collection - Private with some exceptions
     match /users/{userId} {
-      allow read: if request.auth != null && request.auth.uid == userId; // Users can read their own data
+      // Users can read their own data, or any authenticated user can read for AI matching
+      allow read: if request.auth != null; // Allow authenticated users to read for AI features
       allow write: if request.auth != null && request.auth.uid == userId; // Users can write their own data
       
       // Nested collections in users

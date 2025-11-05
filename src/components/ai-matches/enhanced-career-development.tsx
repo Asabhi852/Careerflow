@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useUser, useFirestore, useDoc } from '@/firebase';
 // @ts-ignore - Firebase Firestore import issue
 import { doc } from 'firebase/firestore';
@@ -52,17 +52,12 @@ export function EnhancedCareerDevelopment() {
   const [focusAreas, setFocusAreas] = useState<CareerFocusArea[]>([]);
   const [insights, setInsights] = useState<CareerInsight[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const hasAnalyzed = useRef(false);
 
   const userProfileRef = firestore && user ? doc(firestore, 'users', user.uid) : null;
   const { data: userProfile } = useDoc<UserProfile>(userProfileRef);
 
-  useEffect(() => {
-    if (userProfile) {
-      generateCareerAnalysis(userProfile);
-    }
-  }, [userProfile]);
-
-  const generateCareerAnalysis = async (profile: UserProfile) => {
+  const generateCareerAnalysis = useCallback(async (profile: UserProfile) => {
     setIsLoading(true);
 
     try {
@@ -77,7 +72,14 @@ export function EnhancedCareerDevelopment() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    if (userProfile && !hasAnalyzed.current) {
+      hasAnalyzed.current = true;
+      generateCareerAnalysis(userProfile);
+    }
+  }, [userProfile, generateCareerAnalysis]);
 
   const analyzeCareerFocusAreas = async (profile: UserProfile): Promise<CareerFocusArea[]> => {
     const areas: CareerFocusArea[] = [];

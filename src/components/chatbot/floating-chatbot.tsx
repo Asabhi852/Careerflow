@@ -120,10 +120,7 @@ export function FloatingChatbot() {
           timestamp: new Date()
         };
 
-        setMessages((prev) => {
-          const newMessages = [...prev, botMessage];
-          return newMessages.sort((a, b) => a.sequence - b.sequence);
-        });
+        setMessages((prev) => [...prev, botMessage]);
       } else {
         throw new Error('Invalid response from AI service');
       }
@@ -138,10 +135,7 @@ export function FloatingChatbot() {
         timestamp: new Date()
       };
 
-      setMessages((prev) => {
-        const newMessages = [...prev, errorMessage];
-        return newMessages.sort((a, b) => a.sequence - b.sequence);
-      });
+      setMessages((prev) => [...prev, errorMessage]);
     } finally {
       setIsLoading(false);
     }
@@ -271,13 +265,13 @@ export function FloatingChatbot() {
                           
                           <div
                             className={cn(
-                              "max-w-[75%] px-3 py-2 rounded-2xl text-sm break-words overflow-hidden",
+                              "max-w-[75%] px-3 py-2 rounded-2xl text-sm",
                               message.sender === 'user'
                                 ? 'bg-gradient-to-br from-blue-600 to-blue-700 text-white shadow-md rounded-br-sm'
                                 : 'bg-white text-gray-900 border border-gray-200 shadow-sm rounded-bl-sm'
                             )}
                           >
-                            <p className="whitespace-pre-wrap leading-relaxed break-words overflow-wrap-anywhere">{message.text}</p>
+                            <p className="whitespace-pre-wrap leading-relaxed break-words" style={{ wordBreak: 'break-word', overflowWrap: 'break-word' }}>{message.text}</p>
                             <p className={cn(
                               "text-xs mt-1",
                               message.sender === 'user' ? 'text-blue-100' : 'text-gray-500'

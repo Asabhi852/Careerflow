@@ -388,36 +388,110 @@ function findSemanticSimilarity(jobSkill: string, profileSkills: string[]): {
 }
 
 /**
- * Get skill importance level
+ * Get skill importance level based on job requirements and market demand
  */
 function getSkillImportance(skill: string, job: JobPosting): 'high' | 'medium' | 'low' {
-  const highImportanceSkills = ['javascript', 'python', 'react', 'sql', 'aws'];
-  const mediumImportanceSkills = ['docker', 'kubernetes', 'git', 'linux'];
+  const skillLower = skill.toLowerCase();
+  const jobTitleLower = job.title.toLowerCase();
   
-  if (highImportanceSkills.some(s => skill.toLowerCase().includes(s))) return 'high';
-  if (mediumImportanceSkills.some(s => skill.toLowerCase().includes(s))) return 'medium';
+  // Core programming languages and frameworks
+  const highImportanceSkills = [
+    'javascript', 'typescript', 'python', 'java', 'react', 'angular', 'vue',
+    'node.js', 'sql', 'aws', 'azure', 'gcp', 'docker', 'kubernetes',
+    'microservices', 'rest api', 'graphql', 'mongodb', 'postgresql',
+    'machine learning', 'ai', 'data science', 'cloud', 'devops'
+  ];
+  
+  // Supporting and specialized skills
+  const mediumImportanceSkills = [
+    'git', 'linux', 'agile', 'scrum', 'ci/cd', 'jenkins', 'terraform',
+    'redis', 'elasticsearch', 'kafka', 'rabbitmq', 'nginx', 'express',
+    'django', 'flask', 'spring boot', 'testing', 'jest', 'pytest'
+  ];
+  
+  // Check if skill appears in job title (higher priority)
+  if (jobTitleLower.includes(skillLower)) return 'high';
+  
+  // Check against predefined lists
+  if (highImportanceSkills.some(s => skillLower.includes(s) || s.includes(skillLower))) return 'high';
+  if (mediumImportanceSkills.some(s => skillLower.includes(s) || s.includes(skillLower))) return 'medium';
+  
+  // Additional context-based importance
+  if (job.skills && job.skills.length > 0) {
+    const skillIndex = job.skills.findIndex(s => s.toLowerCase() === skillLower);
+    // Skills listed first are typically more important
+    if (skillIndex >= 0 && skillIndex < 3) return 'high';
+    if (skillIndex >= 3 && skillIndex < 6) return 'medium';
+  }
+  
   return 'low';
 }
 
 /**
- * Get learning resources for a skill
+ * Get comprehensive learning resources for a skill
  */
 function getLearningResources(skill: string): string[] {
+  const skillLower = skill.toLowerCase();
+  
   const resources: Record<string, string[]> = {
-    'javascript': ['MDN Web Docs', 'freeCodeCamp', 'JavaScript.info'],
-    'python': ['Python.org', 'Real Python', 'Codecademy'],
-    'react': ['React Docs', 'React Tutorial', 'Egghead.io'],
-    'sql': ['SQLBolt', 'W3Schools SQL', 'Mode Analytics'],
-    'aws': ['AWS Training', 'Cloud Academy', 'A Cloud Guru'],
+    // Programming Languages
+    'javascript': ['MDN Web Docs', 'freeCodeCamp', 'JavaScript.info', 'Eloquent JavaScript'],
+    'typescript': ['TypeScript Handbook', 'TypeScript Deep Dive', 'Execute Program'],
+    'python': ['Python.org', 'Real Python', 'Codecademy', 'Automate the Boring Stuff'],
+    'java': ['Oracle Java Tutorials', 'Java Programming MOOC', 'Baeldung'],
+    'c#': ['Microsoft Learn', 'C# Station', 'Pluralsight C#'],
+    'go': ['Go by Example', 'A Tour of Go', 'Go.dev'],
+    'rust': ['The Rust Book', 'Rustlings', 'Rust by Example'],
+    
+    // Frontend Frameworks
+    'react': ['React Official Docs', 'React Tutorial', 'Egghead.io', 'Epic React'],
+    'angular': ['Angular.io', 'Angular University', 'Academind'],
+    'vue': ['Vue.js Guide', 'Vue Mastery', 'Vue School'],
+    'next.js': ['Next.js Docs', 'Next.js by Vercel', 'Lee Robinson'],
+    
+    // Backend & Databases
+    'node.js': ['Node.js Docs', 'Node University', 'The Net Ninja'],
+    'express': ['Express.js Guide', 'MDN Express Tutorial', 'Node.js Tutorial'],
+    'sql': ['SQLBolt', 'Mode Analytics SQL', 'W3Schools SQL', 'PostgreSQL Tutorial'],
+    'mongodb': ['MongoDB University', 'MongoDB Docs', 'The Net Ninja MongoDB'],
+    'postgresql': ['PostgreSQL Tutorial', 'Postgres Guide', 'Learn PostgreSQL'],
+    'mysql': ['MySQL Tutorial', 'W3Schools MySQL', 'MySQL for Developers'],
+    
+    // Cloud & DevOps
+    'aws': ['AWS Training', 'A Cloud Guru', 'Cloud Academy', 'AWS Skill Builder'],
+    'azure': ['Microsoft Learn Azure', 'Azure Documentation', 'Pluralsight Azure'],
+    'gcp': ['Google Cloud Training', 'Qwiklabs', 'Coursera GCP'],
+    'docker': ['Docker Docs', 'Docker Mastery', 'Play with Docker'],
+    'kubernetes': ['Kubernetes.io', 'KodeKloud', 'Kubernetes the Hard Way'],
+    'terraform': ['Terraform Docs', 'HashiCorp Learn', 'Terraform Up & Running'],
+    'jenkins': ['Jenkins.io', 'Jenkins Tutorial', 'CloudBees University'],
+    
+    // Data Science & ML
+    'machine learning': ['Coursera ML', 'Fast.ai', 'Kaggle Learn', 'Google ML Crash Course'],
+    'data science': ['DataCamp', 'Kaggle', 'Data Science Handbook', 'Towards Data Science'],
+    'tensorflow': ['TensorFlow.org', 'TensorFlow Tutorial', 'Deep Learning.ai'],
+    'pytorch': ['PyTorch.org', 'PyTorch Tutorial', 'Fast.ai'],
+    
+    // Soft Skills & Methodologies
+    'agile': ['Scrum.org', 'Agile Alliance', 'Mountain Goat Software'],
+    'scrum': ['Scrum Guide', 'Scrum.org Learning', 'Scrum Alliance'],
+    'project management': ['PMI', 'Project Management Institute', 'Coursera PM'],
+    
+    // Testing
+    'testing': ['Testing Library', 'Jest Docs', 'Cypress.io', 'Test Automation University'],
+    'jest': ['Jest Documentation', 'Testing JavaScript', 'Kent C. Dodds'],
+    'cypress': ['Cypress Docs', 'Cypress Real World App', 'Test Automation'],
   };
 
+  // Find matching resources
   for (const [key, resourceList] of Object.entries(resources)) {
-    if (skill.toLowerCase().includes(key)) {
+    if (skillLower.includes(key) || key.includes(skillLower)) {
       return resourceList;
     }
   }
 
-  return ['Coursera', 'Udemy', 'LinkedIn Learning', 'YouTube'];
+  // Default comprehensive resources
+  return ['Coursera', 'Udemy', 'Pluralsight', 'LinkedIn Learning', 'freeCodeCamp', 'YouTube'];
 }
 
 /**

@@ -53,10 +53,7 @@ export function ChatBot() {
         text: "Thanks for your message! I'm here to help you with job search, resume tips, and career advice. What specific area would you like assistance with?",
         sender: 'bot'
       };
-      setMessages(prev => {
-        const newMessages = [...prev, botResponse];
-        return newMessages.sort((a, b) => a.sequence - b.sequence);
-      });
+      setMessages(prev => [...prev, botResponse]);
     }, 1000);
   };
 
@@ -112,13 +109,13 @@ export function ChatBot() {
                   >
                     <div
                       className={cn(
-                        "max-w-[80%] px-3 py-2 rounded-lg text-sm break-words overflow-hidden",
+                        "max-w-[80%] px-3 py-2 rounded-lg text-sm",
                         message.sender === 'user'
                           ? "bg-primary text-primary-foreground"
                           : "bg-muted"
                       )}
                     >
-                      <p className="whitespace-pre-wrap break-words">{message.text}</p>
+                      <p className="whitespace-pre-wrap break-words" style={{ wordBreak: 'break-word', overflowWrap: 'break-word' }}>{message.text}</p>
                     </div>
                   </div>
                 ))}

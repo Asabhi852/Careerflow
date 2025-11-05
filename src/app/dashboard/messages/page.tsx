@@ -72,9 +72,33 @@ function MessagesPageContent() {
         );
         
         // Sort messages by timestamp to ensure proper sequential order
+        // Handle both Firestore Timestamp and Date objects
         return conversationMessages.sort((a, b) => {
-            const aTime = a.timestamp?.toDate?.()?.getTime() || a.timestamp?.getTime?.() || 0;
-            const bTime = b.timestamp?.toDate?.()?.getTime() || b.timestamp?.getTime?.() || 0;
+            let aTime = 0;
+            let bTime = 0;
+            
+            // Handle Firestore Timestamp objects
+            if (a.timestamp?.toDate) {
+                aTime = a.timestamp.toDate().getTime();
+            } else if (a.timestamp?.getTime) {
+                aTime = a.timestamp.getTime();
+            } else if (a.timestamp?.seconds) {
+                aTime = a.timestamp.seconds * 1000;
+            }
+            
+            if (b.timestamp?.toDate) {
+                bTime = b.timestamp.toDate().getTime();
+            } else if (b.timestamp?.getTime) {
+                bTime = b.timestamp.getTime();
+            } else if (b.timestamp?.seconds) {
+                bTime = b.timestamp.seconds * 1000;
+            }
+            
+            // If timestamps are the same or missing, maintain insertion order by using message ID
+            if (aTime === bTime) {
+                return (a.id || '').localeCompare(b.id || '');
+            }
+            
             return aTime - bTime;
         });
     }, [messages, selectedConversation, user]);
@@ -179,15 +203,17 @@ function MessagesPageContent() {
             clearTimeout(typingTimeoutRef.current);
         }
 
-        const timestamp = serverTimestamp();
         // @ts-ignore - Firebase doc function
         const messageId = doc(collection(firestore, 'temp')).id; // Generate a unique ID
+        
+        // Use client timestamp as fallback to ensure ordering before server timestamp is set
+        const clientTimestamp = new Date();
 
         const messageData: Omit<Message, 'id'> = {
             senderId: user.uid,
             receiverId: selectedConversation.id,
             content: input.trim(),
-            timestamp,
+            timestamp: serverTimestamp(),
             status: 'sent',
             read: false,
         };
@@ -326,13 +352,13 @@ function MessagesPageContent() {
                                                             </Avatar>
                                                         )}
                                                         {!isSender && shouldGroup && <div className="w-8" />}
-                                                        <div className={`flex flex-col ${isSender ? 'items-end' : 'items-start'} max-w-[75%] min-w-0 flex-shrink-0`}>
-                                                            <div className={`group relative px-3 py-2 rounded-lg shadow-sm overflow-hidden ${
+                                                        <div className={`flex flex-col ${isSender ? 'items-end' : 'items-start'} max-w-[75%] min-w-0`}>
+                                                            <div className={`group relative px-3 py-2 rounded-lg shadow-sm ${
                                                                 isSender 
                                                                     ? 'bg-[#dcf8c6] text-gray-900' 
                                                                     : 'bg-white border border-gray-200 text-gray-900'
                                                             } ${!shouldGroup ? (isSender ? 'rounded-br-none' : 'rounded-bl-none') : ''}`}>
-                                                                <p className="break-words text-sm leading-relaxed whitespace-pre-wrap word-break-all overflow-wrap-anywhere max-w-full overflow-hidden">
+                                                                <p className="break-words text-sm leading-relaxed whitespace-pre-wrap overflow-wrap-break-word" style={{ wordBreak: 'break-word', overflowWrap: 'break-word' }}>
                                                                     {msg.content}
                                                                 </p>
                                                                 <div className={`flex items-center gap-1 mt-1 ${isSender ? 'justify-end' : 'justify-start'}`}>

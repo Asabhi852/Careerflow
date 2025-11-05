@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { Upload, FileText, Loader2, CheckCircle2, AlertCircle, Briefcase, MapPin, DollarSign, TrendingUp } from 'lucide-react';
+import { Upload, FileText, Loader2, CheckCircle2, AlertCircle, Briefcase, MapPin, DollarSign, TrendingUp, BookOpen } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 
 export function ResumeJobMatcher() {
@@ -423,29 +423,86 @@ export function ResumeJobMatcher() {
             )}
           </div>
 
-          {/* Skill Gaps */}
+          {/* AI-Powered Skill Recommendations */}
           {data.skillGaps && data.skillGaps.length > 0 && (
-            <Card>
+            <Card className="border-blue-200 bg-gradient-to-br from-blue-50 to-white">
               <CardHeader>
-                <CardTitle>Skills to Develop</CardTitle>
-                <CardDescription>
-                  These skills are in high demand and can improve your job prospects
-                </CardDescription>
+                <div className="flex items-center gap-2">
+                  <div className="p-2 bg-blue-100 rounded-lg">
+                    <BookOpen className="h-5 w-5 text-blue-600" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-lg">AI-Recommended Skills to Develop</CardTitle>
+                    <CardDescription>
+                      Based on your resume analysis and top {data.jobMatches?.length || 0} job matches
+                    </CardDescription>
+                  </div>
+                </div>
               </CardHeader>
               <CardContent>
+                <div className="space-y-3 mb-4">
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <TrendingUp className="h-4 w-4 text-green-600" />
+                    <span>Learning these skills can increase your match score by up to 20%</span>
+                  </div>
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {data.skillGaps.map((gap, index) => (
-                    <div key={index} className="p-4 border rounded-lg space-y-2">
+                  {data.skillGaps.slice(0, 8).map((gap, index) => (
+                    <div 
+                      key={index} 
+                      className={`p-4 border rounded-lg space-y-3 transition-all hover:shadow-md ${
+                        gap.importance === 'high' 
+                          ? 'border-red-200 bg-red-50/50' 
+                          : gap.importance === 'medium'
+                          ? 'border-orange-200 bg-orange-50/50'
+                          : 'border-gray-200 bg-white'
+                      }`}
+                    >
                       <div className="flex items-center justify-between">
-                        <span className="font-medium">{gap.skill}</span>
-                        <Badge variant="outline">{gap.importance}</Badge>
+                        <span className="font-semibold text-base">{gap.skill}</span>
+                        <Badge 
+                          variant={gap.importance === 'high' ? 'destructive' : 'outline'}
+                          className={
+                            gap.importance === 'high' 
+                              ? 'bg-red-600' 
+                              : gap.importance === 'medium'
+                              ? 'bg-orange-500 text-white'
+                              : ''
+                          }
+                        >
+                          {gap.importance} priority
+                        </Badge>
                       </div>
-                      <div className="text-xs text-muted-foreground">
-                        Resources: {gap.learningResources.join(', ')}
+                      
+                      <div className="text-sm text-muted-foreground">
+                        <div className="font-medium mb-1">Recommended Learning Resources:</div>
+                        <div className="flex flex-wrap gap-1">
+                          {gap.learningResources.slice(0, 3).map((resource, idx) => (
+                            <span 
+                              key={idx}
+                              className="inline-flex items-center px-2 py-1 bg-white border rounded text-xs hover:bg-blue-50 cursor-pointer transition-colors"
+                            >
+                              {resource}
+                            </span>
+                          ))}
+                        </div>
                       </div>
+                      
+                      {gap.importance === 'high' && (
+                        <div className="flex items-center gap-1 text-xs text-red-600 font-medium">
+                          <AlertCircle className="h-3 w-3" />
+                          <span>Highly sought after in matched jobs</span>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
+                
+                {data.skillGaps.length > 8 && (
+                  <div className="mt-4 text-center text-sm text-muted-foreground">
+                    +{data.skillGaps.length - 8} more skills identified for development
+                  </div>
+                )}
               </CardContent>
             </Card>
           )}

@@ -411,6 +411,13 @@ If you like this project, please give it a ⭐ on GitHub!
 
 ---
 
-**Made with ❤️ and ☕ by Abhishek**
+**Made with ❤️ and ☕ by  **
+team members:
+ ~ Abhishek
+ ~ Abhishek S H
+ ~ Adarsha 
+ ~ Ashok B
+ ~ 
 
-*Last Updated: October 31, 2025*
+
+*Last Updated: November 4, 2025*
