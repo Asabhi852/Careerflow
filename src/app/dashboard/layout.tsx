@@ -33,6 +33,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Button } from '@/components/ui/button';
 import { useEffect, useState } from 'react';
+import { UserTypeSwitch } from '@/components/layout/user-type-switch';
 
 function DashboardContent({ children }: { children: React.ReactNode }) {
   const { user } = useUser();
@@ -85,7 +86,10 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
       {isMounted && isMobile && (
         <header className="sticky top-0 z-40 flex h-14 items-center justify-between gap-4 border-b bg-background px-4 sm:static sm:h-auto sm:border-0 sm:bg-transparent sm:px-6">
           <Logo />
-          <SidebarTrigger />
+          <div className="flex items-center gap-2">
+            <UserTypeSwitch />
+            <SidebarTrigger />
+          </div>
         </header>
       )}
       <Sidebar>
@@ -161,6 +165,7 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
       <SidebarInset>
          {isMounted && !isMobile && (
            <header className="sticky top-0 z-40 flex h-14 items-center justify-end gap-4 border-b bg-background px-4 sm:static sm:h-auto sm:border-0 sm:bg-transparent sm:px-6">
+            <UserTypeSwitch />
             <SidebarTrigger />
           </header>
          )}

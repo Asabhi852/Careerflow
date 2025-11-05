@@ -97,15 +97,18 @@ export type WorkExperience = {
     endDate?: string;
     description?: string;
     current?: boolean;
+    imageUrl?: string; // Image associated with the experience
 };
 
 export type Certificate = {
-    id: string;
+    id?: string;
     name: string;
-    issuer: string;
+    issuer?: string;
+    issuingOrganization?: string; // Alternative to issuer
     issueDate: string;
     expiryDate?: string;
     certificateUrl?: string;
+    imageUrl?: string; // Image of the certificate
     credentialId?: string;
 };
 

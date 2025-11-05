@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Heart, MessageCircle, Share2, Bookmark, Clock } from 'lucide-react';
+import { Heart, MessageCircle, Share2, Bookmark, Clock, Award, Briefcase, ExternalLink, Calendar } from 'lucide-react';
 import type { Post } from '@/lib/types';
 import { formatDistanceToNow } from 'date-fns';
 import Link from 'next/link';
@@ -63,7 +63,25 @@ export function PostCard({ post, onLike, isLiked }: PostCardProps) {
 
   return (
     <Card className="hover:shadow-lg transition-shadow overflow-hidden">
-      {post.imageUrl && (
+      {/* Video Display */}
+      {post.videoUrl && post.type === 'video' && (
+        <div className="relative w-full overflow-hidden bg-black">
+          <video 
+            src={post.videoUrl}
+            controls
+            className="w-full max-h-96 object-contain"
+            poster={post.videoThumbnail}
+          />
+          {post.featured && (
+            <Badge className="absolute top-4 right-4 bg-gradient-to-r from-yellow-500 to-orange-500">
+              Featured
+            </Badge>
+          )}
+        </div>
+      )}
+
+      {/* Image Display */}
+      {post.imageUrl && post.type !== 'certificate' && !post.videoUrl && (
         <div className="relative h-48 w-full overflow-hidden">
           <img 
             src={post.imageUrl} 
@@ -74,6 +92,70 @@ export function PostCard({ post, onLike, isLiked }: PostCardProps) {
             <Badge className="absolute top-4 right-4 bg-gradient-to-r from-yellow-500 to-orange-500">
               Featured
             </Badge>
+          )}
+        </div>
+      )}
+
+      {/* Certificate Display */}
+      {post.certificate && post.type === 'certificate' && (
+        <div className="relative w-full overflow-hidden border-b">
+          <div className="bg-gradient-to-br from-blue-50 to-purple-50 p-6">
+            <div className="flex items-start gap-4 mb-4">
+              <div className="p-3 bg-white rounded-lg shadow-sm">
+                <Award className="h-8 w-8 text-blue-600" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-bold text-lg text-blue-900">{post.certificate.name}</h3>
+                <p className="text-sm text-gray-600">{post.certificate.issuingOrganization}</p>
+                {post.certificate.issueDate && (
+                  <p className="text-xs text-gray-500 mt-1 flex items-center gap-1">
+                    <Calendar className="h-3 w-3" />
+                    {new Date(post.certificate.issueDate).toLocaleDateString()}
+                  </p>
+                )}
+                {post.certificate.credentialId && (
+                  <p className="text-xs text-gray-500 mt-1 flex items-center gap-1">
+                    <ExternalLink className="h-3 w-3" />
+                    ID: {post.certificate.credentialId}
+                  </p>
+                )}
+              </div>
+            </div>
+            {post.certificate.imageUrl && (
+              <img 
+                src={post.certificate.imageUrl}
+                alt={post.certificate.name}
+                className="w-full max-h-64 object-contain rounded-lg border-2 border-white shadow-md"
+              />
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Work Experience Display */}
+      {post.workExperience && post.type === 'work_experience' && (
+        <div className="relative w-full overflow-hidden border-b bg-gradient-to-br from-slate-50 to-gray-50 p-6">
+          <div className="flex items-start gap-4">
+            <div className="p-3 bg-white rounded-lg shadow-sm">
+              <Briefcase className="h-8 w-8 text-slate-600" />
+            </div>
+            <div className="flex-1">
+              <h3 className="font-bold text-lg text-slate-900">{post.workExperience.position}</h3>
+              <p className="text-sm text-gray-600">{post.workExperience.company}</p>
+              <p className="text-xs text-gray-500 mt-1">
+                {post.workExperience.startDate} - {post.workExperience.current ? 'Present' : post.workExperience.endDate}
+              </p>
+              {post.workExperience.description && (
+                <p className="text-sm text-gray-700 mt-3 line-clamp-3">{post.workExperience.description}</p>
+              )}
+            </div>
+          </div>
+          {post.workExperience.imageUrl && (
+            <img 
+              src={post.workExperience.imageUrl}
+              alt={post.workExperience.company}
+              className="w-full h-48 object-cover rounded-lg mt-4 shadow-sm"
+            />
           )}
         </div>
       )}

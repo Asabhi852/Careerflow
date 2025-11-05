@@ -2,12 +2,12 @@
 // @ts-ignore - React hooks import issue
 import { useState, useMemo } from 'react';
 // @ts-ignore - Firebase Firestore import issue
-import { collection, query, orderBy } from 'firebase/firestore';
-import { useFirestore, useCollection, useUser, useMemoFirebase } from '@/firebase';
+import { collection, query, orderBy, doc } from 'firebase/firestore';
+import { useFirestore, useCollection, useUser, useMemoFirebase, useDoc } from '@/firebase';
 import { Button } from '@/components/ui/button';
 import { JobCard, JobCardSkeleton } from '@/components/jobs/job-card';
 import { CreateJobPostingDialog } from '@/components/jobs/create-job-dialog';
-import type { JobPosting } from '@/lib/types';
+import type { JobPosting, UserProfile } from '@/lib/types';
 // @ts-ignore - Lucide icons import issue
 import { PlusCircle, RefreshCw } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -20,6 +20,14 @@ export default function JobsPage() {
   const [activeTab, setActiveTab] = useState<'all' | 'internal' | 'linkedin' | 'naukri'>('all');
   const firestore = useFirestore();
   const { user } = useUser();
+
+  // Fetch user profile to get location
+  const userProfileRef = useMemoFirebase(() => {
+    if (!firestore || !user) return null;
+    return doc(firestore, 'users', user.uid);
+  }, [firestore, user]);
+
+  const { data: userProfile } = useDoc<UserProfile>(userProfileRef);
 
   // Fetch internal jobs from Firestore
   const jobsQuery = useMemoFirebase(() => {
@@ -40,7 +48,7 @@ export default function JobsPage() {
     enabled: activeTab !== 'internal'
   });
 
-  // Separate user's jobs and other jobs, then combine based on active tab
+  // Separate user's jobs and other jobs, then combine based on active tab with location-based sorting
   const { myJobs, displayedJobs } = useMemo(() => {
     const internal = (internalJobs || []).map(job => ({ ...job, source: 'internal' as const }));
     
@@ -63,14 +71,41 @@ export default function JobsPage() {
     
     // Separate jobs posted by current user
     const myJobs = user ? jobsToDisplay.filter(job => job.posterId === user.uid) : [];
-    const otherJobs = user ? jobsToDisplay.filter(job => job.posterId !== user.uid) : jobsToDisplay;
+    let otherJobs = user ? jobsToDisplay.filter(job => job.posterId !== user.uid) : jobsToDisplay;
     
-    // Put user's jobs first
+    // Sort other jobs by location match (user's location first)
+    if (userProfile?.location) {
+      const userLocation = userProfile.location.toLowerCase().trim();
+      
+      otherJobs = otherJobs.sort((a, b) => {
+        const aLocation = (a.location || '').toLowerCase().trim();
+        const bLocation = (b.location || '').toLowerCase().trim();
+        
+        // Check for exact match
+        const aMatchesUser = aLocation === userLocation;
+        const bMatchesUser = bLocation === userLocation;
+        
+        if (aMatchesUser && !bMatchesUser) return -1;
+        if (!aMatchesUser && bMatchesUser) return 1;
+        
+        // Check for partial match (city name in location string)
+        const aContainsUser = aLocation.includes(userLocation);
+        const bContainsUser = bLocation.includes(userLocation);
+        
+        if (aContainsUser && !bContainsUser) return -1;
+        if (!aContainsUser && bContainsUser) return 1;
+        
+        // If both or neither match, maintain original order
+        return 0;
+      });
+    }
+    
+    // Put user's jobs first, then location-sorted jobs
     return {
       myJobs,
       displayedJobs: [...myJobs, ...otherJobs]
     };
-  }, [internalJobs, externalJobs, activeTab, user]);
+  }, [internalJobs, externalJobs, activeTab, user, userProfile]);
 
   const isLoading = activeTab === 'internal' ? isLoadingInternal : isLoadingInternal || isLoadingExternal;
 

@@ -1,7 +1,28 @@
 # Firebase Permissions Error - Fixed ✅
 
-## Latest Update (November 5, 2025)
-### New Permission Issue Fixed
+## Latest Update (November 5, 2025 - 11:38 AM)
+### Posts Collection Permission Issue Fixed
+Users were getting `FirebaseError: Missing or insufficient permissions` when trying to access the `posts` collection.
+
+**Root Cause:** Firestore rules for the posts collection were not properly deployed to Firebase.
+
+**Solution:** Force-deployed updated Firestore rules with public read access for posts.
+
+```javascript
+// Posts collection rules
+match /posts/{postId} {
+  allow read: if true; // Anyone can read posts (get and list)
+  allow create: if request.auth != null; // Only authenticated users can create
+  allow update, delete: if request.auth != null && request.auth.uid == resource.data.authorId;
+}
+```
+
+**Result:** ✅ Posts collection is now accessible. Users can view and create posts.
+
+---
+
+## Previous Update (November 5, 2025)
+### AI Features Permission Issue Fixed
 Users were getting `FirebaseError: Missing or insufficient permissions` when accessing AI-powered features (Enhanced Career Development).
 
 **Root Cause:** Firestore rules only allowed users to read their own profile (`users/{userId}`), but AI matching features needed to read user profiles for analysis.

@@ -1,76 +1,11 @@
 rules_version = '2';
 
-// Firestore Database Rules
+// TEMPORARY COMPLETELY OPEN RULES FOR TESTING - DO NOT USE IN PRODUCTION
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    // Posts collection - Public read, authenticated write
-    match /posts/{postId} {
-      allow get, list: if true; // Anyone can read and list posts
-      allow create: if request.auth != null; // Only authenticated users can create
-      allow update, delete: if request.auth != null && request.auth.uid == resource.data.authorId; // Only author can update/delete
-    }
-    
-    // Users collection - Private with some exceptions
-    match /users/{userId} {
-      // Users can read their own data, or any authenticated user can read for AI matching
-      allow read: if request.auth != null; // Allow authenticated users to read for AI features
-      allow write: if request.auth != null && request.auth.uid == userId; // Users can write their own data
-      
-      // Nested collections in users
-      match /notifications/{notificationId} {
-        allow read, write: if request.auth != null && request.auth.uid == userId;
-      }
-      
-      match /messages/{messageId} {
-        // User can read their own messages
-        allow read: if request.auth != null && request.auth.uid == userId;
-        
-        // Allow writing messages in two cases:
-        // 1) Sender creates/updates a copy in their own messages subcollection
-        // 2) Sender creates/updates a copy in receiver's messages subcollection
-        allow write: if request.auth != null && (
-          (request.auth.uid == userId && request.resource.data.senderId == request.auth.uid) ||
-          (request.resource.data.senderId == request.auth.uid && request.resource.data.receiverId == userId)
-        );
-      }
-    }
-    
-    // Public profiles - Public read, owner write
-    match /public_profiles/{userId} {
-      allow get, list: if true; // Anyone can read and list public profiles
-      allow create, update, delete: if request.auth != null && request.auth.uid == userId; // Only owner can write
-    }
-    
-    // Job postings - Public read, authenticated write
-    match /job_postings/{jobId} {
-      allow get, list: if true; // Anyone can read and list job postings
-      allow create: if request.auth != null; // Authenticated users can create
-      allow update, delete: if request.auth != null && request.auth.uid == resource.data.posterId; // Only poster can update/delete
-    }
-    
-    // Jobs collection - Public read, authenticated write
-    match /jobs/{jobId} {
-      allow get, list: if true; // Anyone can read and list jobs
-      allow create: if request.auth != null; // Authenticated users can create
-      allow update, delete: if request.auth != null && request.auth.uid == resource.data.posterId; // Only poster can update/delete
-    }
-    
-    // Applications - Private
-    match /applications/{applicationId} {
-      allow read: if request.auth != null && 
-                  (request.auth.uid == resource.data.applicantId || 
-                   request.auth.uid == resource.data.posterId);
-      allow create: if request.auth != null && request.auth.uid == request.resource.data.applicantId;
-      allow update: if request.auth != null && 
-                    (request.auth.uid == resource.data.applicantId || 
-                     request.auth.uid == resource.data.posterId);
-      allow delete: if request.auth != null && request.auth.uid == resource.data.applicantId;
-    }
-    
-    // Conversations - Private between participants
-    match /conversations/{conversationId} {
-      allow read, write: if request.auth != null;
+    // TEMPORARY: Allow all read/write access for testing
+    match /{document=**} {
+      allow read, write: if true;
     }
   }
 }

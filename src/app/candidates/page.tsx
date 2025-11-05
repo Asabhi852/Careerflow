@@ -3,8 +3,8 @@
 // @ts-ignore - React hooks import issue
 import { useState, useMemo, useEffect } from 'react';
 // @ts-ignore - Firebase Firestore import issue
-import { collection, query, limit, where } from 'firebase/firestore';
-import { useFirestore, useCollection, useMemoFirebase, useUser } from '@/firebase';
+import { collection, query, limit, where, doc } from 'firebase/firestore';
+import { useFirestore, useCollection, useMemoFirebase, useUser, useDoc } from '@/firebase';
 import { SiteHeader } from '@/components/layout/site-header';
 import { SiteFooter } from '@/components/layout/site-footer';
 import type { UserProfile } from '@/lib/types';
