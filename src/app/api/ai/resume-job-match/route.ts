@@ -241,14 +241,14 @@ async function getExternalJobs(): Promise<JobPosting[]> {
  */
 function getLearningResources(skill: string): string[] {
   const resources: Record<string, string[]> = {
-    'javascript': ['MDN Web Docs', 'freeCodeCamp', 'JavaScript.info'],
-    'python': ['Python.org', 'Real Python', 'Codecademy'],
-    'react': ['React Docs', 'React Tutorial', 'Egghead.io'],
-    'node': ['Node.js Docs', 'NodeSchool', 'Udemy Node Courses'],
-    'sql': ['SQLBolt', 'W3Schools SQL', 'Mode Analytics'],
-    'aws': ['AWS Training', 'Cloud Academy', 'A Cloud Guru'],
-    'docker': ['Docker Docs', 'Docker Mastery', 'Play with Docker'],
-    'kubernetes': ['Kubernetes.io', 'KodeKloud', 'K8s by Example'],
+    'javascript': ['freeCodeCamp (YouTube)', 'Traversy Media', 'Web Dev Simplified'],
+    'python': ['freeCodeCamp (YouTube)', 'Corey Schafer', 'Tech With Tim'],
+    'react': ['Web Dev Simplified', 'Traversy Media', 'freeCodeCamp (YouTube)'],
+    'node': ['Traversy Media', 'The Net Ninja', 'freeCodeCamp (YouTube)'],
+    'sql': ['freeCodeCamp (YouTube)', 'Alex The Analyst', 'Kudvenkat'],
+    'aws': ['freeCodeCamp (YouTube)', 'Stephane Maarek', 'AWS Tutorials by Be A Better Dev'],
+    'docker': ['TechWorld with Nana', 'freeCodeCamp (YouTube)', 'KodeKloud'],
+    'kubernetes': ['TechWorld with Nana', 'KodeKloud', 'freeCodeCamp (YouTube)'],
   };
 
   for (const [key, resourceList] of Object.entries(resources)) {
@@ -257,7 +257,7 @@ function getLearningResources(skill: string): string[] {
     }
   }
 
-  return ['Coursera', 'Udemy', 'LinkedIn Learning', 'YouTube Tutorials'];
+  return ['freeCodeCamp (YouTube)', 'Traversy Media', 'The Net Ninja', 'Fireship'];
 }
 
 /**

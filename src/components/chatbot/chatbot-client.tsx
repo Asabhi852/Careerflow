@@ -6,7 +6,6 @@ import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Bot, Send, User as UserIcon, Mic, MicOff, Volume2, VolumeX } from 'lucide-react';
-import { multilingualQueryResolution, type MultilingualQueryResolutionInput } from '@/ai/flows/multilingual-query-resolution';
 import { useUser } from '@/firebase';
 
 // TypeScript interfaces for Speech Recognition API
@@ -254,13 +253,25 @@ export function ChatbotClient() {
       // Get user profile data for context
       const userData = user ? `User ID: ${user.uid}, Email: ${user.email}` : undefined;
 
-      const request: MultilingualQueryResolutionInput = {
-        query: currentInput,
-        language: language,
-        userData,
-      };
+      const response = await fetch('/api/ai/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          query: currentInput,
+          language,
+          userData,
+        }),
+      });
 
-      const result = await multilingualQueryResolution(request);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || errorData.error || 'Failed to contact AI service');
+      }
+
+      const json = await response.json();
+      const result = json?.data;
 
       if (result && result.answer) {
         const botMessage: Message = {

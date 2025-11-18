@@ -8,7 +8,6 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { X, MessageCircle, Send, Bot, User as UserIcon, Minimize2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { multilingualQueryResolution } from '@/ai/flows/multilingual-query-resolution';
 import { useUser } from '@/firebase';
 import { LanguageSelector } from './language-selector';
 import { useI18n } from '@/i18n/I18nProvider';
@@ -105,11 +104,25 @@ export function FloatingChatbot() {
     try {
       const userData = user ? `User ID: ${user.uid}, Email: ${user.email}` : undefined;
 
-      const result = await multilingualQueryResolution({
-        query: currentInput,
-        language: language,
-        userData,
+      const response = await fetch('/api/ai/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          query: currentInput,
+          language,
+          userData,
+        }),
       });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || errorData.error || 'Failed to contact AI service');
+      }
+
+      const json = await response.json();
+      const result = json?.data;
 
       if (result && result.answer) {
         const botMessage: Message = {

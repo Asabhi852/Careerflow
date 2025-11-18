@@ -432,9 +432,9 @@ export function ResumeJobMatcher() {
                     <BookOpen className="h-5 w-5 text-blue-600" />
                   </div>
                   <div>
-                    <CardTitle className="text-lg">AI-Recommended Skills to Develop</CardTitle>
+                    <CardTitle className="text-lg">Skills to Develop</CardTitle>
                     <CardDescription>
-                      Based on your resume analysis and top {data.jobMatches?.length || 0} job matches
+                      Enhance your profile by learning these skills, based on your resume analysis and top {data.jobMatches?.length || 0} job matches
                     </CardDescription>
                   </div>
                 </div>
@@ -443,7 +443,7 @@ export function ResumeJobMatcher() {
                 <div className="space-y-3 mb-4">
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <TrendingUp className="h-4 w-4 text-green-600" />
-                    <span>Learning these skills can increase your match score by up to 20%</span>
+                    <span>Enhance your profile and improve your match score by building these skills through the recommended YouTube channels.</span>
                   </div>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
