@@ -231,9 +231,49 @@ export const jobOpportunitiesFlow = ai.defineFlow(
     }),
   },
   async (input) => {
-    // First, parse the resume
-    const { resumeParserFlow } = await import('./resume-parser');
-    const parsedResume = await resumeParserFlow({ resumeText: input.resumeText });
+    let parsedResume: ParsedResume;
+
+    try {
+      // First, parse the resume
+      const { resumeParserFlow } = await import('./resume-parser');
+      parsedResume = await resumeParserFlow({ resumeText: input.resumeText });
+    } catch (error) {
+      console.error('[Job Opportunities] Error parsing resume with AI, falling back to basic parsing:', error);
+      parsedResume = {
+        personalInfo: {
+          firstName: '',
+          lastName: '',
+          email: undefined,
+          phoneNumber: undefined,
+          location: '',
+          linkedIn: undefined,
+          portfolio: undefined,
+          age: undefined,
+        },
+        professionalSummary: {
+          bio: input.resumeText.slice(0, 500),
+          currentJobTitle: undefined,
+          currentCompany: undefined,
+          yearsOfExperience: undefined,
+        },
+        workExperience: [],
+        education: [],
+        skills: {
+          technical: [],
+          soft: [],
+          languages: [],
+          certifications: [],
+        },
+        certificates: [],
+        projects: [],
+        achievements: [],
+        interests: [],
+        availability: 'open_to_offers',
+        expectedSalary: undefined,
+        preferredJobTypes: [],
+        preferredLocations: [],
+      };
+    }
 
     // Generate skills summary for job matching
     const allSkills = [

@@ -132,11 +132,25 @@ export default function JobsPage() {
     const sortJobs = (jobs: JobPosting[]) => {
       if (sortByLocation && coordinates) {
         // Sort by distance from user's location
-        return sortByDistance(
+        const distanceSorted = sortByDistance(
           jobs,
           coordinates,
           (job) => job.coordinates || null
         );
+
+        // Within similar distance, prioritize newer jobs
+        return distanceSorted.sort((a, b) => {
+          const aHasDistance = a.distance !== undefined;
+          const bHasDistance = b.distance !== undefined;
+
+          if (aHasDistance && bHasDistance && a.distance !== b.distance) {
+            return (a.distance as number) - (b.distance as number);
+          }
+
+          const dateA = new Date(a.postedDate || 0).getTime();
+          const dateB = new Date(b.postedDate || 0).getTime();
+          return dateB - dateA;
+        });
       } else {
         // Default sort by date
         return jobs.sort((a, b) => {
